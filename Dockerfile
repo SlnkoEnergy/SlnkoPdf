@@ -33,8 +33,8 @@ COPY . .
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Set port
-ENV PORT=4000
-EXPOSE 4000
+ENV PORT=${PORT}
+EXPOSE 8080
 
 # Start command
 CMD ["npm", "start"]
