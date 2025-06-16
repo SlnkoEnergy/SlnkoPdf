@@ -1,74 +1,23 @@
 const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
+const os = require("os");
 const https = require("https");
 const http = require("http");
-const os = require("os");
-const { convert } = require("pdf-poppler");
 const { PDFDocument } = require("pdf-lib");
 
-// Fetch image as base64 from a URL
-async function fetchBase64FromUrl(url) {
-  return new Promise((resolve, reject) => {
-    const lib = url.startsWith("https") ? https : http;
-    lib.get(url, (response) => {
-      if (response.statusCode !== 200) {
-        return reject(new Error(`Failed to get '${url}' (${response.statusCode})`));
-      }
-      const chunks = [];
-      response.on("data", (chunk) => chunks.push(chunk));
-      response.on("end", () => {
-        const buffer = Buffer.concat(chunks);
-        const contentType = response.headers["content-type"] || "image/png";
-        const base64 = buffer.toString("base64");
-        resolve(`data:${contentType};base64,${base64}`);
-      });
-    }).on("error", reject);
-  });
-}
-
-async function convertPdfToJpegs(pdfPath) {
-  const outputDir = path.dirname(pdfPath);
-  const opts = {
-    format: "jpeg",
-    out_dir: outputDir,
-    out_prefix: path.basename(pdfPath, path.extname(pdfPath)),
-    page: null,
-  };
-  await convert(pdfPath, opts);
-  const files = await fs.readdir(outputDir);
-  return files
-    .filter((f) => /\.jpe?g$/i.test(f))
-    .map((f) => path.join(outputDir, f));
-}
-
-// Convert image buffer to single-page PDF buffer
-async function imageBufferToPdf(buf, mimeType) {
-  const pdfDoc = await PDFDocument.create();
-  let img = mimeType.includes("png")
-    ? await pdfDoc.embedPng(buf)
-    : await pdfDoc.embedJpg(buf);
-  const page = pdfDoc.addPage([img.width, img.height]);
-  page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
-  return pdfDoc.save();
-}
 
 async function generateExpenseSheet(sheet, options = {}) {
-  // Load local logo as base64
-    const {
+  const {
     department = "",
     printAttachments = false,
-    attachmentLinks = [],
+    attachmentLinks = []
   } = options;
 
-  const logoPath = path.resolve(__dirname, "../assets/1.png");
-  const logoData = fs.readFileSync(logoPath).toString("base64");
-  const logoSrc = `data:image/png;base64,${logoData}`;
-
-  // Prepare summary of categories
   const summaryMap = {};
   let totalApproved = 0;
   let totalRequested = 0;
+
   (sheet.items || []).forEach((item) => {
     const category = item.category || "Others";
     const approved = Number(item.approved_amount) || 0;
@@ -97,7 +46,6 @@ async function generateExpenseSheet(sheet, options = {}) {
     </tr>
   `;
 
-  // Build item rows
   const itemsHTML = (sheet.items || [])
     .map((item, i) => {
       const projectName = item.project_id?.name || "";
@@ -116,46 +64,40 @@ async function generateExpenseSheet(sheet, options = {}) {
       `;
     }).join("");
 
-  // Format dates
   const fromDate = new Date(sheet.expense_term.from).toLocaleDateString("en-IN");
   const toDate = new Date(sheet.expense_term.to).toLocaleDateString("en-IN");
 
-  // Handle attachments if required
-let attHTML = "";
-  if (printAttachments && attachmentLinks.length) {
-    const temp = await fs.mkdtemp(path.join(os.tmpdir(), "att-"));
-    for (const url of attachmentLinks) {
-      try {
-        const isPdf = /\.pdf(\?.*)?$/i.test(url);
-        if (isPdf) {
-          // download PDF
-          const pdfData = await fetchBase64FromUrl(url);
-          const buf = Buffer.from(pdfData.split(",")[1], "base64");
-          const tempPdf = path.join(temp, path.basename(url.split("?")[0]));
-          await fs.writeFile(tempPdf, buf);
+  const logoData = fs.readFileSync(path.resolve(__dirname, "../assets/1.png"));
+  const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`;
+  let attHTML = "";
 
-          // convert PDF pages to images
-          const images = await convertPdfToJpegs(tempPdf);
-          for (const img of images) {
-            const img64 = await fs.readFile(img);
-            const data64 = `data:image/jpeg;base64,${img64.toString("base64")}`;
-            attHTML += `<img src="${data64}" style="max-width:100%; margin:10px 0;" />`;
-          }
-        } else {
-          const img64 = await fetchBase64FromUrl(url);
-          attHTML += `<img src="${img64}" style="max-width:100%; margin:10px 0;" />`;
+  if (printAttachments && attachmentLinks.length) {
+    for (const url of attachmentLinks) {
+      const isPdf = /\.pdf(\?.*)?$/i.test(url);
+      if (isPdf) {
+        try {
+          const pdfBuffer = await new Promise((resolve, reject) => {
+            const lib = url.startsWith("https") ? https : http;
+            lib.get(url, (res) => {
+              if (res.statusCode !== 200) return reject(new Error(`PDF fetch failed: ${url}`));
+              const chunks = [];
+              res.on("data", (chunk) => chunks.push(chunk));
+              res.on("end", () => resolve(Buffer.concat(chunks)));
+            }).on("error", reject);
+          });
+
+          options.attachments = options.attachments || [];
+          options.attachments.push({ type: "pdf", buffer: pdfBuffer });
+
+        } catch (e) {
+          console.error("PDF Attachment Error:", e);
         }
-      } catch (e) {
-        console.error("Attachment error", e);
+      } else {
+        attHTML += `<img src="${url}" style="max-width:100%; margin:10px 0;" />`;
       }
     }
-    await fs.remove(temp);
   }
 
-    
-  
-
-  // Complete HTML template
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -222,69 +164,61 @@ let attHTML = "";
           ${itemsHTML}
         </tbody>
       </table>
-      <div class="summary-table">
-        <h3>Summary</h3>
-        <table>
-          <thead>
-            <tr>
-              <th style="text-align: left;">Category Type</th>
-              <th>Requested Amount</th>
-              <th>Approved Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${summaryRows}
-            ${summaryTotalRow}
-          </tbody>
-        </table>
-      </div>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Requested</th>
+            <th>Approved</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryRows}
+          ${summaryTotalRow}
+        </tbody>
+      </table>
+
       ${attHTML}
+
     </body>
     </html>
   `;
 
-  // Puppeteer launch options
-   const browser = await puppeteer.launch({
-    headless: "new",
+  const browser = await puppeteer.launch({
+    headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   const page = await browser.newPage();
   await page.setContent(htmlContent, { waitUntil: "networkidle0" });
-  const mainPdf = await page.pdf({
+
+  const mainPdfBuffer = await page.pdf({
     format: "A4",
     printBackground: true,
-    margin: { top: "10px", bottom: "10px", left: "10px", right: "10px" },
+    margin: { top: "0mm", bottom: "10mm", left: "2mm", right: "2mm" },
   });
+
   await browser.close();
 
-  // Merge any extra attachments passed directly as Buffers (attachments[])
-  if (!Array.isArray(options.attachments) || options.attachments.length === 0) {
-    return mainPdf;
+  if (!options.attachments || options.attachments.length === 0) {
+    return mainPdfBuffer;
   }
 
-  const merged = await PDFDocument.create();
-  const mainDoc = await PDFDocument.load(mainPdf);
-  (await merged.copyPages(mainDoc, mainDoc.getPageIndices())).forEach((p) =>
-    merged.addPage(p)
-  );
+  const mergedPdfDoc = await PDFDocument.create();
 
-  // attachments buffers
+  const mainPdf = await PDFDocument.load(mainPdfBuffer);
+  const copiedMainPages = await mergedPdfDoc.copyPages(mainPdf, mainPdf.getPageIndices());
+  copiedMainPages.forEach((page) => mergedPdfDoc.addPage(page));
+
   for (const att of options.attachments) {
-    if (att.type === "pdf") {
-      const doc = await PDFDocument.load(att.buffer);
-      (await merged.copyPages(doc, doc.getPageIndices())).forEach((p) =>
-        merged.addPage(p)
-      );
-    } else if (att.type === "image") {
-      const imgPdf = await imageBufferToPdf(att.buffer, att.mimeType);
-      const doc = await PDFDocument.load(imgPdf);
-      (await merged.copyPages(doc, doc.getPageIndices())).forEach((p) =>
-        merged.addPage(p)
-      );
+    if (att.type === "pdf" && att.buffer) {
+      const attPdf = await PDFDocument.load(att.buffer);
+      const attPages = await mergedPdfDoc.copyPages(attPdf, attPdf.getPageIndices());
+      attPages.forEach((page) => mergedPdfDoc.addPage(page));
     }
   }
 
-  return merged.save();
+  const finalPdfBytes = await mergedPdfDoc.save();
+  return Buffer.from(finalPdfBytes);
 }
 
 module.exports = generateExpenseSheet;
