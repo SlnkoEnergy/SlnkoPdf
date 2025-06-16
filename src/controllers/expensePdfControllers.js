@@ -6,6 +6,7 @@ const expensePdf = async (req, res) => {
     const printAttachments = req.body.printAttachments || false;
     const attachmentLinks = req.body.attachmentLinks || [];
 
+
     if (!sheet || !sheet.expense_code) {
       return res.status(400).json({ message: "Invalid or missing expense sheet data" });
     }

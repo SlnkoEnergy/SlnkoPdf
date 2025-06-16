@@ -55,14 +55,11 @@ async function imageBufferToPdf(buf, mimeType) {
 
 async function generateExpenseSheet(sheet, options = {}) {
   // Load local logo as base64
-
     const {
     department = "",
     printAttachments = false,
     attachmentLinks = [],
-    attachments = [],
   } = options;
-
 
   const logoPath = path.resolve(__dirname, "../assets/1.png");
   const logoData = fs.readFileSync(logoPath).toString("base64");
