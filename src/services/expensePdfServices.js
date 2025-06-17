@@ -48,8 +48,8 @@ async function generateExpenseSheet(sheet, options = {}) {
 
   const itemsHTML = (sheet.items || [])
     .map((item, i) => {
-      const projectName = item.project_id?.name || "";
-      const projectCode = item.project_id?.code || "";
+      const projectName = item.project_name || "";
+      const projectCode = item.project_code || "";
       return `
         <tr>
           <td>${i + 1}</td>
@@ -60,6 +60,7 @@ async function generateExpenseSheet(sheet, options = {}) {
           <td>${item.expense_date ? new Date(item.expense_date).toLocaleDateString("en-IN") : "-"}</td>
           <td>${item.invoice?.invoice_amount ?? "-"}</td>
           <td>${item.approved_amount ?? "-"}</td>
+          <td>${item.attachment_url ? "YES" : "NO"}</td>
         </tr>
       `;
     }).join("");
@@ -158,6 +159,7 @@ async function generateExpenseSheet(sheet, options = {}) {
             <th>Date</th>
             <th>Requested Amount</th>
             <th>Approved Amount</th>
+            <th>Attachment</th>
           </tr>
         </thead>
         <tbody>
