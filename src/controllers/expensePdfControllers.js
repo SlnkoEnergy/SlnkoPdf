@@ -2,7 +2,7 @@ const generateExpenseSheet = require("../services/expensePdfServices");
 
 const expensePdf = async (req, res) => {
   try {
-    const sheet = req.body.sheet; // Expecting sheet under 'sheet'
+    const sheet = req.body.sheet;
     const printAttachments = req.body.printAttachments || false;
     const attachmentLinks = req.body.attachmentLinks || [];
 
