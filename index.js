@@ -16,4 +16,3 @@ app.use("/v1/expensePdf", expensePdfRoutes);
 app.listen(PORT, () => {
   console.log(`Slnko app is running on port ${PORT}`);
 });
-  // "pdf-poppler": "^0.2.1",
