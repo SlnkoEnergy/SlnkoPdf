@@ -1,59 +1,70 @@
 const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
-const https = require("https");
-const http = require("http");
-const { PDFDocument } = require("pdf-lib");
+
+async function generatePaymentApprovalSheet(Pos) {
+  const summaryMap = {};
+  let totalAmount = 0;
 
 
-async function generatePaymentApprovalSheet(Pos, options = {}) {
 
-    const summaryMap = {};
-    let totalAmount = 0;
+  (Pos || []).forEach((po) => {
+    const category = po.items.category || "Others";
+    const payment = Number(po.items.amount) || 0;
 
-    (Pos.items || []).forEach((item) => {
-        const catagory = item.catagory || "Others";
-        const payment = Number(item.amount) || 0;
-        if (summaryMap[catagory]) summaryMap[catagory] = { payment: 0 };
-        summaryMap[catagory].payment += payment;
-        totalAmount += payment;
-    });
+    if (!summaryMap[category]) summaryMap[category] = { payment: 0 };
+    summaryMap[category].payment += payment;
+    totalAmount += payment;
+  })
 
-    const summaryRows = Object.entries(summaryMap)
-        .map(([category, amounts]) => `
+
+  const summaryRows = Object.entries(summaryMap)
+    .map(
+      ([category, amounts]) => `
       <tr>
         <td style="border:1px solid #000; padding:6px; text-align:left;">${category}</td>
         <td style="border:1px solid #000; padding:6px; text-align:right;">${amounts.payment.toFixed(2)}</td>
       </tr>
-    `).join("");
+    `
+    )
+    .join("");
 
-    const summaryTotalRow = `
+  const summaryTotalRow = `
     <tr>
       <td style="border:1px solid #000; padding:6px; font-weight:bold; text-align:left;">Total</td>
-      <td style="border:1px solid #000; padding:6px; font-weight:bold; text-align:right;">${totalRequested.toFixed(2)}</td>
-      <td style="border:1px solid #000; padding:6px; font-weight:bold; text-align:right;">${totalApproved.toFixed(2)}</td>
+      <td style="border:1px solid #000; padding:6px; font-weight:bold; text-align:right;">${totalAmount.toFixed(2)}</td>
     </tr>
   `;
 
-    const itemsHTML = (Pos.items || [])
-        .map((item, i) => {
-            return `
+  const itemsHTML = (Pos || [])
+    .map((po, i) => {
+      return `
         <tr>
           <td>${i + 1}</td>
-          <td>${item.payId}</td>
-          <td>${item.request_date ? new Date(item.request_date).toLocaleDateString("en-IN") : "NA"}</td>
-          <td>${item.category || "-"}</td>
-          <td class="left">${item.description || "-"}</td>
-          <td ${item.amount ? item.amount : "NA"} </td>
+          <td>
+          <div>${po.projectId}</div>
+  <div>${po.client_name}</div>
+  <div>${po.group_name}</div>
+          </td>
+          <td>
+          <div> ${po.items.payId}</div>
+          <div> ${po.items.category}</div>
+          <div> ${po.vendor}</div>
+          </td>
+          <td>${po.items.request_date ? new Date(po.items.request_date).toLocaleDateString("en-IN") : "NA"}</td>
+          <td class="left">${po.items.description || "-"}</td>
+          <td>${po.items.amount ? po.items.amount.toFixed(2) : "NA"}</td>
         </tr>
-            `;
-        }).join("");
+      `;
+    })
+    .join("");
 
-    const logoData = fs.readFileSync(path.resolve(__dirname, "../assets/1.png"));
-    const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`;
+  const logoData = fs.readFileSync(path.resolve(__dirname, "../assets/1.png"));
+  const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`;
+  const checkData = fs.readFileSync(path.resolve(__dirname, "../assets/2.png"));
+  const checklogo = `data:image/png;base64, ${checkData.toString("base64")}`;
 
-
-    const htmlContent = `
+  const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -72,37 +83,38 @@ async function generatePaymentApprovalSheet(Pos, options = {}) {
         .header img { max-height: 50px; max-width: 150px; object-fit: contain; }
         h2.title { text-align: center; margin-bottom: 20px; font-size: 22px; text-transform: uppercase; }
         .info { display: flex; justify-content: space-between; margin-bottom: 20px; }
-        .info div { width: 32%; font-size: 14px; line-height: 1.6; }
+        .info div { width: 48%; font-size: 14px; line-height: 1.6; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
         th, td { border: 1px solid #000; padding: 6px; text-align: center; }
         td.left { text-align: left; }
         .summary-table { margin-top: 30px; width: 50%; font-size: 12px; margin-left: auto; margin-right: auto; }
+
+        
+        
       </style>
     </head>
     <body>
       <div class="watermark">Slnko Energy</div>
       <div class="header">
         <img src="${logoSrc}" alt="Slnko Logo" />
+        <div style="display: flex; flex-direction: column; gap: 1px; font-size: 15px; font-weight: 400;">
+  <p style="margin: 0;">2nd Floor, B58B, Block B,</p>
+  <p style="margin: 0;">Sector 60, Noida, Uttar Pradesh 201309</p>
+</div>
+        
       </div>
-      <h2 class="title">Payment Approval Sheet</h2>
-      <div class="info">
-        <div>
-          <strong>Project Id:</strong> ${Pos.projectId}<br>
-          <strong>Client Name:</strong> ${Pos.client_name}<br>
-        </div>
-       
-        <div>
-          <strong>Project Name:</strong> ${Pos.project_name}<br>
-          <strong>Group Name:</strong> ${Pos.group_name}
-        </div>
-      </div>
+      <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;">
+  <h2 class="title" style="margin: 0;">Payment Approval Sheet</h2>
+  <img src="${checklogo}" alt="check logo" style="height: 20px; width: 20px;" />
+</div>
+
       <table>
         <thead>
           <tr>
             <th>S.No</th>
-            <th>Payment Id</th>
+            <th>Project Details</th>
+            <th>Payment Details</th>
             <th>Requested Date</th>
-            <th>Item</th>
             <th>Remark</th>
             <th>Requested Amount</th>
           </tr>
@@ -115,33 +127,48 @@ async function generatePaymentApprovalSheet(Pos, options = {}) {
         <thead>
           <tr>
             <th>Item</th>
-            <th>Requested Amount </th>
+            <th>Requested Amount</th>
           </tr>
         </thead>
         <tbody>
           ${summaryRows}
           ${summaryTotalRow}
+          
         </tbody>
+        
       </table>
+
+      <div style="margin-top: 80px; text-align: right ;">
+  <div style="border-top: 1px solid #000; width: 200px; margin-left: auto; margin-right: 0;"></div>
+  <div style="margin-top: 4px; font-size: 12px; margin-right: 20px;">Cam Head Signature</div>
+</div>
+
     </body>
     </html>
   `;
 
-    const browser = await puppeteer.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
 
-    const mainPdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        margin: { top: "0mm", bottom: "10mm", left: "2mm", right: "2mm" },
+  const page = await browser.newPage();
+  await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
-    });
-    await browser.close();
-    return mainPdfBuffer;
+  const pdfBuffer = await page.pdf({
+    format: "A4",
+    printBackground: true,
+    margin: { top: "0mm", bottom: "10mm", left: "2mm", right: "2mm" },
+    displayHeaderFooter: true,
+  footerTemplate: `
+    <div style="font-size:10px; width:100%; text-align:center; color: gray; padding:5px 0;">
+      Page <span class="pageNumber"></span> of <span class="totalPages"></span> | © SLnko Energy Pvt. Ltd.
+    </div>
+  `,
+  });
+
+  await browser.close();
+  return pdfBuffer;
 }
 
 module.exports = generatePaymentApprovalSheet;

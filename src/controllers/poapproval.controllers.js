@@ -1,4 +1,3 @@
-const { PDFDocument } = require("pdf-lib");
 const generatePaymentApprovalSheet = require("../services/poapproval.services");
 
 const poapprovalPdf = async( req, res) => {
@@ -9,17 +8,8 @@ const poapprovalPdf = async( req, res) => {
             return res.status(400).json({ message: "No PO data Provided"});
         }
 
-        const mergedPdfDoc = await PDFDocument.create();
-
-        for(const Po of Pos) {
-            const buffer = await generatePaymentApprovalSheet(Po);
-
-            const singlePdf = await PDFDocument.load(buffer);
-            const copiedPages = await mergedPdfDoc.copyPages(singlePdf, singlePdf.getPageIndices());
-            copiedPages.forEach((page) => mergedPdfDoc.addPage(page));
-        }
-         
-        const finalPdfBuffer = await mergedPdfDoc.save();
+        const finalPdfBuffer = await generatePaymentApprovalSheet(Pos);
+        
 
         res.set({
             "Content-Type" : "application/pdf",
