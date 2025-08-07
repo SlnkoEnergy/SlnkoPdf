@@ -9,8 +9,8 @@ async function generatePaymentApprovalSheet(Pos) {
 
 
   (Pos || []).forEach((po) => {
-    const category = po.items.category || "Others";
-    const payment = Number(po.items.amount) || 0;
+    const category = po.paid_for || "Others";
+    const payment = Number(po.amount_paid) || 0;
 
     if (!summaryMap[category]) summaryMap[category] = { payment: 0 };
     summaryMap[category].payment += payment;
@@ -42,18 +42,18 @@ async function generatePaymentApprovalSheet(Pos) {
         <tr>
           <td>${i + 1}</td>
           <td>
-          <div>${po.projectId}</div>
-  <div>${po.client_name}</div>
+          <div>${po.project_code}</div>
+  <div>${po.project_name}</div>
   <div>${po.group_name}</div>
           </td>
           <td>
-          <div> ${po.items.payId}</div>
-          <div> ${po.items.category}</div>
+          <div> ${po.pay_id}</div>
+          <div> ${po.paid_for}</div>
           <div> ${po.vendor}</div>
           </td>
-          <td>${po.items.request_date ? new Date(po.items.request_date).toLocaleDateString("en-IN") : "NA"}</td>
-          <td class="left">${po.items.description || "-"}</td>
-          <td>${po.items.amount ? po.items.amount.toFixed(2) : "NA"}</td>
+          <td>${po.dbt_date ? new Date(po.dbt_date).toLocaleDateString("en-IN") : "NA"}</td>
+          <td class="left">${po.comment || "-"}</td>
+          <td>${po.amount_paid ? po.amount_paid.toFixed(2) : "NA"}</td>
         </tr>
       `;
     })
