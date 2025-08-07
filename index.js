@@ -4,6 +4,8 @@ const cors = require("cors");
 const { config } = require("dotenv");
 const expensePdfRoutes = require("./src/routes/expensePdfRoutes");
 const scopePdfRoutes = require("./src/routes/scope.routes"); 
+const poapproval = require("./src/routes/poapproval.routes")
+const paymenthistory = require ("./src/routes/paymenthistory.routes");
 config({ path: "./.env" });
 
 app.use(cors({ origin: "*" }));
@@ -14,7 +16,8 @@ const PORT = process.env.PORT;
 
 app.use("/v1/expensePdf", expensePdfRoutes);
 app.use("/v1/scopePdf", scopePdfRoutes);
-
+app.use("/v1/po-approve", poapproval);
+app.use("/v1/payment-history", paymenthistory );
 app.listen(PORT, () => {
   console.log(`Slnko app is running on port ${PORT}`);
 });

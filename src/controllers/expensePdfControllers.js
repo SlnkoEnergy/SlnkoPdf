@@ -16,7 +16,6 @@ const expensePdf = async (req, res) => {
       const attachmentLinks = sheet.items
         ?.map((item) => item.attachment_url)
         .filter((url) => url && url.startsWith("http")) || [];
-
       const buffer = await generateExpenseSheet(sheet, {
         department,
         printAttachments,
