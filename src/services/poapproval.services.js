@@ -53,7 +53,7 @@ async function generatePaymentApprovalSheet(Pos) {
           </td>
           <td>${po.dbt_date ? new Date(po.dbt_date).toLocaleDateString("en-IN") : "NA"}</td>
           <td class="left">${po.comment || "-"}</td>
-          <td>${po.amount_paid ? po.amount_paid.toFixed(2) : "NA"}</td>
+          <td>${po.amount_paid ? po.amount_paid : "NA"}</td>
         </tr>
       `;
     })
