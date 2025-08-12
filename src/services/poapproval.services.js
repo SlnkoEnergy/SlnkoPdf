@@ -10,7 +10,7 @@ async function generatePaymentApprovalSheet(Pos) {
 
   (Pos || []).forEach((po) => {
     const category = po.paid_for || "Others";
-    const payment = Number(po.amount_paid) || 0;
+    const payment = Number(po.amt_for_customer) || 0;
 
     if (!summaryMap[category]) summaryMap[category] = { payment: 0 };
     summaryMap[category].payment += payment;
@@ -53,7 +53,7 @@ async function generatePaymentApprovalSheet(Pos) {
           </td>
           <td>${po.dbt_date ? new Date(po.dbt_date).toLocaleDateString("en-IN") : "NA"}</td>
           <td class="left">${po.comment || "-"}</td>
-          <td>${po.amount_paid ? po.amount_paid : "NA"}</td>
+          <td>${po.amt_for_customer ? po.amt_for_customer : "NA"}</td>
         </tr>
       `;
     })
