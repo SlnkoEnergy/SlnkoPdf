@@ -80,7 +80,7 @@ async function generatePaymentApprovalSheet(Pos) {
           z-index: -1;
         }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .header img { max-height: 50px; max-width: 150px; object-fit: contain; }
+        .header img { max-height: 85px; max-width: 400px; object-fit: contain; }
         h2.title { text-align: center; margin-bottom: 20px; font-size: 22px; text-transform: uppercase; }
         .info { display: flex; justify-content: space-between; margin-bottom: 20px; }
         .info div { width: 48%; font-size: 14px; line-height: 1.6; }
@@ -97,50 +97,65 @@ async function generatePaymentApprovalSheet(Pos) {
       <div class="watermark">Slnko Energy</div>
       <div class="header">
         <img src="${logoSrc}" alt="Slnko Logo" />
-        <div style="display: flex; flex-direction: column; gap: 1px; font-size: 15px; font-weight: 400;">
+        <div style="display: flex; flex-direction: column">
+        <p style="margin:0; font-size:18px; font-weight:bold;">SLNKO ENERGY PVT LTD</p>
   <p style="margin: 0;">2nd Floor, B58B, Block B,</p>
   <p style="margin: 0;">Sector 60, Noida, Uttar Pradesh 201309</p>
+  <p style="margin: 0;">
+  mail: <a href="info@slnkoenergy.com">info@slnkoenergy.com</a>
+</p>
+<p style="margin: 0;">
+  web: <a href="https://slnkoprotrac.com" target="_blank">www.slnkoprotrac.com</a>
+</p>
+
+
 </div>
         
       </div>
-      <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;">
-  <h2 class="title" style="margin: 0;">Payment Approval Sheet</h2>
-  <img src="${checklogo}" alt="check logo" style="height: 20px; width: 20px;" />
+    <div style="margin-top: 100px;">
+
+  <!-- Title Section -->
+  <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;">
+    <h2 class="title" style="margin: 0;">Payment Approval Sheet</h2>
+    <img src="${checklogo}" alt="check logo" style="height: 20px; width: 20px;" />
+  </div>
+
+  <!-- Main Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>S.No</th>
+        <th>Project Details</th>
+        <th>Payment Details</th>
+        <th>Requested Date</th>
+        <th>Remark</th>
+        <th>Requested Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsHTML}
+    </tbody>
+  </table>
+
+  <!-- Summary Table -->
+  <table class="summary-table" style="margin-top: 15px;">
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Requested Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${summaryRows}
+      ${summaryTotalRow}
+    </tbody>
+  </table>
+
 </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>S.No</th>
-            <th>Project Details</th>
-            <th>Payment Details</th>
-            <th>Requested Date</th>
-            <th>Remark</th>
-            <th>Requested Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemsHTML}
-        </tbody>
-      </table>
-      <table class="summary-table">
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th>Requested Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${summaryRows}
-          ${summaryTotalRow}
-          
-        </tbody>
-        
-      </table>
-
-      <div style="margin-top: 80px; text-align: right ;">
-  <div style="border-top: 1px solid #000; width: 200px; margin-left: auto; margin-right: 0;"></div>
-  <div style="margin-top: 4px; font-size: 12px; margin-right: 20px;">Cam Head Signature</div>
+      <div style="margin-top: 100px; text-align: right ;">
+  <div style="font-weight: bold; font-size: 18px;">Signature</div>
+  <div style="margin-top: 4px; font-size: 18px;  font-weight: bold;">Cam Head</div>
 </div>
 
     </body>
@@ -160,7 +175,7 @@ async function generatePaymentApprovalSheet(Pos) {
     printBackground: true,
     margin: { top: "0mm", bottom: "10mm", left: "2mm", right: "2mm" },
     displayHeaderFooter: true,
-  footerTemplate: `
+    footerTemplate: `
     <div style="font-size:10px; width:100%; text-align:center; color: gray; padding:5px 0;">
       Page <span class="pageNumber"></span> of <span class="totalPages"></span> | © SLnko Energy Pvt. Ltd.
     </div>
