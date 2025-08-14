@@ -11,7 +11,7 @@ async function generatepaymenthistorySheet(Payments) {
 
     (Payments || []).forEach((Payment) => {
       const company = Payment.paid_to || "Others";
-      const pay = Number(Payment.amount) || 0;
+      const pay = Number(Payment.amount_paid) || 0;
 
       if (!summaryMap[company]) summaryMap[company] = { pay: 0 };
       summaryMap[company].pay += pay;
@@ -42,9 +42,9 @@ async function generatepaymenthistorySheet(Payments) {
                             <td>${payment.po_number}</td>
                             <td>${payment.paid_to}</td>
                             <td>${payment.paid_for}</td>
-                            <td>${payment.amount}</td>
+                            <td>${payment.amount_paid}</td>
                             <td>${payment.utr}</td>
-                            <td>${payment.urt_submited ? new Date(payment.urt_submited).toLocaleDateString("en-IN") : "NA"}</td>
+                            <td>${payment.utr_submited ? new Date(payment.utr_submited).toLocaleDateString("en-IN") : "NA"}</td>
                         </tr>
                     `;
       }).join("");
@@ -82,12 +82,21 @@ async function generatepaymenthistorySheet(Payments) {
       </style>
     </head>
     <body>
-      <div class="watermark">Slnko Energy</div>
+           <div class="watermark">Slnko Energy</div>
       <div class="header">
         <img src="${logoSrc}" alt="Slnko Logo" />
-        <div style="display: flex; flex-direction: column; gap: 1px; font-size: 15px; font-weight: 400;">
+        <div style="display: flex; flex-direction: column">
+        <p style="margin:0; font-size:18px; font-weight:bold;">SLNKO ENERGY PVT LTD</p>
   <p style="margin: 0;">2nd Floor, B58B, Block B,</p>
   <p style="margin: 0;">Sector 60, Noida, Uttar Pradesh 201309</p>
+  <p style="margin: 0;">
+  mail: <a href="info@slnkoenergy.com">info@slnkoenergy.com</a>
+</p>
+<p style="margin: 0;">
+  web: <a href="https://slnkoprotrac.com" target="_blank">www.slnkoprotrac.com</a>
+</p>
+
+
 </div>
         
       </div>
