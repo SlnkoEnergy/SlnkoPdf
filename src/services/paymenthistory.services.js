@@ -44,7 +44,7 @@ async function generatepaymenthistorySheet(Payments) {
                             <td>${payment.paid_for}</td>
                             <td>${payment.amount}</td>
                             <td>${payment.utr}</td>
-                            <td>${payment.urt_submited ? new Date(payment.urt_submited).toLocaleDateString("en-IN") : "NA"}</td>
+                            <td>${payment.utr_submited ? new Date(payment.utr_submited).toLocaleDateString("en-IN") : "NA"}</td>
                         </tr>
                     `;
       }).join("");
