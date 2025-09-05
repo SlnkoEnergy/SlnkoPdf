@@ -50,11 +50,11 @@ async function generatePaymentApprovalSheet(Pos) {
           <div> ${po.pay_id}</div>
           <div> ${po.paid_for}</div>
           <div> ${po.vendor}</div>
+          <div> ${po.po_number ? po.po_number : "N/A"} </div>
           </td>
           <td>${po.dbt_date ? new Date(po.dbt_date).toLocaleDateString("en-IN") : "NA"}</td>
           <td class="left">${po.comment || "-"}</td>
           <td>${po.amt_for_customer ? po.amt_for_customer : "NA"}</td>
-          <td>${po.po_number ? po.po_number : "N/A"}</td>
         </tr>
       `;
     })
@@ -131,7 +131,6 @@ async function generatePaymentApprovalSheet(Pos) {
         <th>Requested Date</th>
         <th>Remark</th>
         <th>Requested Amount</th>
-        <th>Po Number</th>
       </tr>
     </thead>
     <tbody>
