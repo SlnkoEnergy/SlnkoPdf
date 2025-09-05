@@ -54,6 +54,7 @@ async function generatePaymentApprovalSheet(Pos) {
           <td>${po.dbt_date ? new Date(po.dbt_date).toLocaleDateString("en-IN") : "NA"}</td>
           <td class="left">${po.comment || "-"}</td>
           <td>${po.amt_for_customer ? po.amt_for_customer : "NA"}</td>
+          <td>${po_number ? po_number : "N/A"}</td>
         </tr>
       `;
     })
@@ -130,6 +131,7 @@ async function generatePaymentApprovalSheet(Pos) {
         <th>Requested Date</th>
         <th>Remark</th>
         <th>Requested Amount</th>
+        <th>Po Number</th>
       </tr>
     </thead>
     <tbody>
