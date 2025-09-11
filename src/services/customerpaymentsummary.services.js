@@ -44,7 +44,7 @@ function loadEmbeddedFontCSS() {
 `;
     } catch (_) {}
   }
-  return ""; // still render if no local font found
+  return "";
 }
 
 /* --------------------- main PDF generator -------------------- */
@@ -368,7 +368,7 @@ async function generateCustomerPaymentSheet(
     </thead>
     <tbody>${salesRows || ""}</tbody>
     <tfoot>
-      <tr><td colspan="4" class="right">Total Sales</td><td class="num nowrap">₹ ${inr(sale_val_total)}</td></tr>
+      <tr><td colspan="5" class="right">Total Sales</td><td class="num nowrap">₹ ${inr(sale_val_total)}</td></tr>
     </tfoot>
   </table>
 
