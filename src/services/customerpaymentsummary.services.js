@@ -343,7 +343,7 @@ async function generateCustomerPaymentSheet(
   <!-- PURCHASE -->
   <div class="section"><h2 class="section-title">Purchase History</h2></div>
   <table class="table-fixed">
-    <colgroup><col style="width:44px"><col style="width:120px"><col style="width:170px"><col style="width:200px"><col style="width:110px"><col style="width:120px"><col style="width:120px"><col style="width:130px"></colgroup>
+    <colgroup><col style="width:44px"><col style="width:200px"><col style="width:170px"><col style="width:200px"><col style="width:110px"><col style="width:120px"><col style="width:120px"><col style="width:130px"></colgroup>
     <thead>
       <tr><th>S.No</th><th>PO Number</th><th class="left">Vendor</th><th class="left">Item Name</th><th>PO Value (₹)</th><th>Advance Paid (₹)</th><th>Remaining (₹)</th><th>Total Billed (₹)</th></tr>
     </thead>
@@ -362,7 +362,7 @@ async function generateCustomerPaymentSheet(
   <!-- SALES -->
   <div class="section"><h2 class="section-title">Sales History</h2></div>
   <table class="table-fixed">
-    <colgroup><col style="width:44px"><col style="width:120px"><col style="width:100px"><col style="width:190px"><col style="width:220px"><col style="width:120px"></colgroup>
+    <colgroup><col style="width:44px"><col style="width:200px"><col style="width:100px"><col style="width:190px"><col style="width:220px"><col style="width:120px"></colgroup>
     <thead>
       <tr><th>S.No</th><th>PO Number</th><th>Conversion Date</th><th class="left">Vendor</th><th class="left">Item Name</th><th>Sales Value (₹)</th></tr>
     </thead>
