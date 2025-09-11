@@ -1,3 +1,4 @@
+
 const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
@@ -16,6 +17,37 @@ const fmtLongDate = (d) =>
     day: "numeric",
   });
 
+const FONT_CANDIDATES = [
+  path.resolve(__dirname, "../assets/fonts/DejaVuSans.woff2"),
+  path.resolve(__dirname, "../assets/fonts/DejaVuSans.ttf"),
+  path.resolve(__dirname, "../assets/fonts/NotoSansSymbols2-Regular.ttf"),
+];
+
+function loadEmbeddedFontCSS() {
+  for (const p of FONT_CANDIDATES) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const buf = fs.readFileSync(p);
+      const ext = path.extname(p).toLowerCase();
+      const isWoff2 = ext === ".woff2";
+      const mime = isWoff2 ? "font/woff2" : "font/ttf";
+      const format = isWoff2 ? "woff2" : "truetype";
+      const b64 = buf.toString("base64");
+      return `
+@font-face{
+  font-family:'PdfSans';
+  src:url('data:${mime};base64,${b64}') format('${format}');
+  font-weight:normal;
+  font-style:normal;
+  font-display:swap;
+}
+`;
+    } catch (_) {}
+  }
+  return ""; // still render if no local font found
+}
+
+/* --------------------- main PDF generator -------------------- */
 async function generateCustomerPaymentSheet(
   projectOrCredits,
   DebitHistorysOr,
@@ -48,7 +80,7 @@ async function generateCustomerPaymentSheet(
   }
 
   try {
-    // ---- totals ----
+    /* ---- totals ---- */
     const creditTotal = sumBy(creditHistorys, "amount");
     const debitTotal = sumBy(DebitHistorys, "amount");
     const pur_po = sumBy(purchaseHistorys, "po_value");
@@ -68,6 +100,7 @@ async function generateCustomerPaymentSheet(
       project_kwp: projectDetails?.project_kwp ?? "-",
     };
 
+    /* ---- table rows ---- */
     const creditRows = (creditHistorys || [])
       .map(
         (r, i) => `
@@ -91,7 +124,6 @@ async function generateCustomerPaymentSheet(
         <td class="left">${r.paid_to || ""}</td>
         <td class="left nowrap">${r.utr || ""}</td>
         <td class="num nowrap">₹ ${inr(r.amount)}</td>
-        
       </tr>`
       )
       .join("");
@@ -142,7 +174,6 @@ async function generateCustomerPaymentSheet(
       )
       .join("");
 
- 
     const bs = Array.isArray(balanceSummary) ? balanceSummary[0] || {} : balanceSummary || {};
     const pick = (...keys) => {
       for (const k of keys) {
@@ -152,55 +183,55 @@ async function generateCustomerPaymentSheet(
       return 0;
     };
 
-const billingType = bs.billing_type || projectDetails.billing_type || "-";
-
-const bsLines = [
-  { no: "1",  label: "Total Received",                                  val: pick("total_received", "totalCredited") },
-  { no: "2",  label: "Total Return",                                    val: pick("total_return", "totalReturn") },
-  { no: "3",  label: "Net Balance ([1]-[2])",                           val: pick("netBalance", "net_balance"), cls: "muted" },
-  { no: "4",  label: "Total Advance Paid to Vendors",                   val: pick("total_advance_paid", "totalAdvancePaidToVendors", "totalAdvancePaid") },
-  { no: "4A", label: "Total Adjustment (Debit-Credit)",                 val: pick("total_adjustment", "totalAdjustment") },
-  { no: "5",  label: "Balance With Slnko ([3]-[4]-[4A])",               val: pick("balance_with_slnko", "balanceWithSlnko"), cls: "accent" },
-  { no: "6",  label: "Total PO Basic Value",                            val: pick("total_po_basic", "totalPoBasic") },
-  { no: "7",  label: "GST Value as per PO",                             val: pick("gst_as_po_basic", "gstAsPoBasic") },
-  { no: "8",  label: "Total PO with GST",                               val: pick("total_po_with_gst", "totalPoWithGst") },
-  { no: "8A", label: "Total Sales with GST",                            val: pick("total_sales", "totalSale") },
-  { no: "9",  label: `GST (${billingType})`,                            val: pick("gst_with_type_percentage", "gstWithTypePercentage") },
-  { no: "10", label: "Total Billed Value",                              val: pick("total_billed_value", "totalBilledValue") },
-  { no: "11", label: "Net Advance Paid ([4]-[10])",                     val: pick("net_advanced_paid", "netAdvancePaid") },
-  { no: "12", label: "Balance Payable to Vendors ([8]-[10]-[11])",      val: pick("balance_payable_to_vendors", "balancePayableToVendors"), cls: "accent" },
-  { no: "13", label: "TCS as Applicable",                               val: pick("tcs_as_applicable", "tcsAsApplicable") },
-  { no: "14", label: "Extra GST Recoverable from Client ([8]-[6])",     val: pick("extraGST", "extra_gst") },
-  { no: "15", label: "Balance Required ([5]-[12]-[13])",                val: pick("balance_required", "balanceRequired"), cls: "strong" },
-];
-
+    const billingType = bs.billing_type || projectDetails.billing_type || "-";
+    const bsLines = [
+      { no: "1",  label: "Total Received",                             val: pick("total_received", "totalCredited") },
+      { no: "2",  label: "Total Return",                               val: pick("total_return", "totalReturn") },
+      { no: "3",  label: "Net Balance ([1]-[2])",                      val: pick("netBalance", "net_balance"), cls: "muted" },
+      { no: "4",  label: "Total Advance Paid to Vendors",              val: pick("total_advance_paid", "totalAdvancePaidToVendors", "totalAdvancePaid") },
+      { no: "4A", label: "Total Adjustment (Debit-Credit)",            val: pick("total_adjustment", "totalAdjustment") },
+      { no: "5",  label: "Balance With Slnko ([3]-[4]-[4A])",          val: pick("balance_with_slnko", "balanceWithSlnko"), cls: "accent" },
+      { no: "6",  label: "Total PO Basic Value",                       val: pick("total_po_basic", "totalPoBasic") },
+      { no: "7",  label: "GST Value as per PO",                        val: pick("gst_as_po_basic", "gstAsPoBasic") },
+      { no: "8",  label: "Total PO with GST",                          val: pick("total_po_with_gst", "totalPoWithGst") },
+      { no: "8A", label: "Total Sales with GST",                       val: pick("total_sales", "totalSale") },
+      { no: "9",  label: `GST (${billingType})`,                       val: pick("gst_with_type_percentage", "gstWithTypePercentage") },
+      { no: "10", label: "Total Billed Value",                         val: pick("total_billed_value", "totalBilledValue") },
+      { no: "11", label: "Net Advance Paid ([4]-[10])",                val: pick("net_advanced_paid", "netAdvancePaid") },
+      { no: "12", label: "Balance Payable to Vendors ([8]-[10]-[11])", val: pick("balance_payable_to_vendors", "balancePayableToVendors"), cls: "accent" },
+      { no: "13", label: "TCS as Applicable",                          val: pick("tcs_as_applicable", "tcsAsApplicable") },
+      { no: "14", label: "Extra GST Recoverable from Client ([8]-[6])",val: pick("extraGST", "extra_gst") },
+      { no: "15", label: "Balance Required ([5]-[12]-[13])",           val: pick("balance_required", "balanceRequired"), cls: "strong" },
+    ];
 
     const bsRows = bsLines.map(line => `
       <tr class="${line.cls ? line.cls : ""}">
         <td class="sno nowrap">${line.no}</td>
         <td class="left">${line.label}</td>
-        <td class="val num nowrap">₹ ${inr(line.val)}</td>  
+        <td class="val num nowrap">₹ ${inr(line.val)}</td>
       </tr>
     `).join("");
 
-    // ---- assets ----
+    /* ---- assets ---- */
     const logoData = fs.readFileSync(path.resolve(__dirname, "../assets/1.png"));
     const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`;
+    const fontFaceCSS = loadEmbeddedFontCSS();
 
-    // ---- HTML/CSS ----
     const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <style>
-    @page { size: A4; margin: 10mm 8mm 18mm 8mm; } /* a touch more bottom for footer */
+    @page { size: A4; margin: 10mm 8mm 18mm 8mm; }
+    ${fontFaceCSS}
     * { box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; margin: 0; color: #121417; }
+    /* Use embedded font first so ₹ renders everywhere */
+    body { font-family: 'PdfSans', Arial, sans-serif; margin: 0; color: #121417; }
 
     /* header */
     .header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:6px 4px 8px; border-bottom:1px solid #DDE3EA; }
-    .header img { max-height: 42px; object-fit: contain; }
+    .header img { max-height: 60px; object-fit: cover; }
     .brand-title { margin:0; font-size:17px; font-weight:800; letter-spacing:.5px; }
     .brand-sub { margin:0; font-size:12px; color:#4B5563; line-height:1.3; }
     .brand-sub a { color:#2563EB; text-decoration:none; }
@@ -247,9 +278,7 @@ const bsLines = [
 
     @media print {
       thead { display: table-header-group !important; }
-      /* We want totals once at the end, not on every page */
-      tfoot { display: table-row-group !important; }
-
+      tfoot { display: table-row-group !important; } /* totals only once at end */
       table { page-break-inside: auto; }
       tr, td, th { page-break-inside: avoid !important; break-inside: avoid !important; }
       .section, .pd { page-break-inside: avoid !important; break-inside: avoid !important; }
@@ -288,12 +317,7 @@ const bsLines = [
   <!-- CREDIT -->
   <div class="section"><h2 class="section-title">Credit History</h2></div>
   <table class="table-fixed">
-    <colgroup>
-      <col style="width:44px">
-      <col style="width:100px">
-      <col style="width:180px">
-      <col style="width:120px">
-    </colgroup>
+    <colgroup><col style="width:44px"><col style="width:100px"><col style="width:180px"><col style="width:120px"></colgroup>
     <thead>
       <tr><th>S.No</th><th>Credit Date</th><th class="left">Mode</th><th>Amount (₹)</th></tr>
     </thead>
@@ -306,20 +330,9 @@ const bsLines = [
   <!-- DEBIT -->
   <div class="section"><h2 class="section-title">Debit History</h2></div>
   <table class="table-fixed">
-    <colgroup>
-      <col style="width:44px">
-      <col style="width:100px">
-      <col style="width:140px">
-      <col style="width:150px">
-      <col style="width:170px">
-      <col style="width:110px">
-      <col style="width:150px">
-    </colgroup>
+    <colgroup><col style="width:44px"><col style="width:100px"><col style="width:140px"><col style="width:150px"><col style="width:170px"><col style="width:110px"><col style="width:150px"></colgroup>
     <thead>
-      <tr>
-        <th>S.No</th><th>Date</th><th>PO Number</th><th class="left">Paid For</th>
-        <th class="left">Paid To</th><th>UTR</th><th>Amount (₹)</th>
-      </tr>
+      <tr><th>S.No</th><th>Date</th><th>PO Number</th><th class="left">Paid For</th><th class="left">Paid To</th><th>UTR</th><th>Amount (₹)</th></tr>
     </thead>
     <tbody>${debitRows || ""}</tbody>
     <tfoot>
@@ -330,21 +343,9 @@ const bsLines = [
   <!-- PURCHASE -->
   <div class="section"><h2 class="section-title">Purchase History</h2></div>
   <table class="table-fixed">
-    <colgroup>
-      <col style="width:44px">
-      <col style="width:120px">
-      <col style="width:170px">
-      <col style="width:200px">
-      <col style="width:110px">
-      <col style="width:120px">
-      <col style="width:120px">
-      <col style="width:130px">
-    </colgroup>
+    <colgroup><col style="width:44px"><col style="width:120px"><col style="width:170px"><col style="width:200px"><col style="width:110px"><col style="width:120px"><col style="width:120px"><col style="width:130px"></colgroup>
     <thead>
-      <tr>
-        <th>S.No</th><th>PO Number</th><th class="left">Vendor</th><th class="left">Item Name</th>
-        <th>PO Value (₹)</th><th>Advance Paid (₹)</th><th>Remaining (₹)</th><th>Total Billed (₹)</th>
-      </tr>
+      <tr><th>S.No</th><th>PO Number</th><th class="left">Vendor</th><th class="left">Item Name</th><th>PO Value (₹)</th><th>Advance Paid (₹)</th><th>Remaining (₹)</th><th>Total Billed (₹)</th></tr>
     </thead>
     <tbody>${purchaseRows || ""}</tbody>
     <tfoot>
@@ -361,14 +362,7 @@ const bsLines = [
   <!-- SALES -->
   <div class="section"><h2 class="section-title">Sales History</h2></div>
   <table class="table-fixed">
-    <colgroup>
-      <col style="width:44px">
-      <col style="width:120px">
-      <col style="width:100px">
-      <col style="width:190px">
-      <col style="width:220px">
-      <col style="width:120px">
-    </colgroup>
+    <colgroup><col style="width:44px"><col style="width:120px"><col style="width:100px"><col style="width:190px"><col style="width:220px"><col style="width:120px"></colgroup>
     <thead>
       <tr><th>S.No</th><th>PO Number</th><th>Conversion Date</th><th class="left">Vendor</th><th class="left">Item Name</th><th>Sales Value (₹)</th></tr>
     </thead>
@@ -381,21 +375,9 @@ const bsLines = [
   <!-- ADJUSTMENT -->
   <div class="section"><h2 class="section-title">Adjustment History</h2></div>
   <table class="table-fixed">
-    <colgroup>
-      <col style="width:44px">
-      <col style="width:100px">
-      <col style="width:140px">
-      <col style="width:120px">
-      <col style="width:140px">
-      <col style="width:auto">
-      <col style="width:120px">
-      <col style="width:120px">
-    </colgroup>
+    <colgroup><col style="width:44px"><col style="width:100px"><col style="width:140px"><col style="width:120px"><col style="width:140px"><col style="width:auto"><col style="width:120px"><col style="width:120px"></colgroup>
     <thead>
-      <tr>
-        <th>S.No</th><th>Date</th><th class="left">Reason</th><th>PO Number</th><th class="left">Paid For</th>
-        <th class="left">Description</th><th>Credit Adjust (₹)</th><th>Debit Adjust (₹)</th>
-      </tr>
+      <tr><th>S.No</th><th>Date</th><th class="left">Reason</th><th>PO Number</th><th class="left">Paid For</th><th class="left">Description</th><th>Credit Adjust (₹)</th><th>Debit Adjust (₹)</th></tr>
     </thead>
     <tbody>${adjustRows || ""}</tbody>
     <tfoot>
@@ -408,26 +390,22 @@ const bsLines = [
     <h2 class="section-title">Balance Summary</h2>
     <div class="bs">
       <table class="table-fixed">
-        <colgroup>
-          <col style="width:42px"><col style="width:auto"><col style="width:140px">
-        </colgroup>
+        <colgroup><col style="width:42px"><col style="width:auto"><col style="width:140px"></colgroup>
         <thead><tr><th style="width:42px">S.No.</th><th class="left">Description</th><th>Value</th></tr></thead>
         <tbody>${bsRows || ""}</tbody>
       </table>
     </div>
   </div>
+
 </body>
 </html>
 `;
 
- 
     const browser = await puppeteer.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     const page = await browser.newPage();
-
-   
     await page.emulateMediaType("print");
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
