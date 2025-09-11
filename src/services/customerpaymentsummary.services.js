@@ -68,7 +68,6 @@ async function generateCustomerPaymentSheet(
       project_kwp: projectDetails?.project_kwp ?? "-",
     };
 
-    // ---- table rows (add nowrap/num classes) ----
     const creditRows = (creditHistorys || [])
       .map(
         (r, i) => `
@@ -143,7 +142,7 @@ async function generateCustomerPaymentSheet(
       )
       .join("");
 
-    // ---- balance summary ----
+ 
     const bs = Array.isArray(balanceSummary) ? balanceSummary[0] || {} : balanceSummary || {};
     const pick = (...keys) => {
       for (const k of keys) {
@@ -421,14 +420,14 @@ const bsLines = [
 </html>
 `;
 
-    // ---- Puppeteer ----
+ 
     const browser = await puppeteer.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     const page = await browser.newPage();
 
-    // ensure @media print rules apply
+   
     await page.emulateMediaType("print");
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
