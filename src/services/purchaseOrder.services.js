@@ -3,7 +3,7 @@ const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
 
-async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName) {
+async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, date, project_id) {
     try {
         // ---------- helpers ----------
         const fmtINR = (n) =>
@@ -60,6 +60,9 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName) {
             })
             .join("");
 
+        const logoData = fs.readFileSync(path.resolve(__dirname, "../assets/1.png"));
+        const logoSrc = `data:image/png;base64, ${logoData.toString("base64")}`;
+
         // ---------- HTML ----------
         const htmlContent = `
 <!DOCTYPE html>
@@ -74,27 +77,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName) {
     --line:#e2e8f0;          /* slate-200 */
     --bg:#ffffff;
   }
-    /* Watermark shown on EVERY page */
-.watermark {
-  position: fixed;               /* repeats on all pages */
-  inset: 0;                      /* full page box */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 0;                    /* behind content, but not negative */
-  pointer-events: none;          /* never clickable */
-}
-.watermark span {
-  transform: rotate(-30deg);
-  font-size: 120px;              /* adjust as you like */
-  color: #1F487C;
-  opacity: 0.06;                 /* subtle */
-  letter-spacing: 2px;
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-}
-
-/* Put all your actual content above the watermark */
+   
 .content {
   position: relative;
   z-index: 1;
@@ -109,7 +92,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName) {
   body{ padding:24px 28px; }
 
   /* Title and PO number same color */
-  .po-title{ font-size:26px; font-weight:500; margin:0 0 14px 30px; color:var(--brand); }
+  .po-title{ font-size:26px; font-weight:500; margin:0 0 0px 30px; color:var(--brand); }
   .po-number{ color:inherit; }
 
   .meta{
@@ -179,6 +162,46 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName) {
   font-size: 16px;
 }
 
+.header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;  /* pushes the right block to the edge */
+  gap:16px;
+  margin:0 0 8px 0;
+}
+
+.header img{
+  display:block;
+  width:110px;        /* tweak size as needed */
+  height:auto;
+  object-fit:contain;
+  flex:0 0 auto;
+}
+
+/* Right side (Project + PO) */
+.header .right{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;   /* right-align text */
+  text-align:right;
+  gap:4px;
+  flex:0 0 auto;
+}
+
+.project-id{
+  margin:0;
+  font-size:14px;
+  font-weight:600;
+  color:#475569;          /* slate-ish */
+}
+
+.po-number{
+  margin:0;
+  font-size:18px;
+  font-weight:700;
+  color:#1F487C;          /* your brand color */
+}
+
 
   @page{ margin:12mm 2mm 12mm 2mm; }
   @media print{
@@ -189,18 +212,26 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName) {
 </style>
 </head>
 <body>
-<div class="watermark"><span>Slnko Energy</span></div>
-  <div class="content">
-  <h1 class="po-title">Purchase Order <span class="po-number">#${orderNumber || "-"}</span></h1>
+ 
+<div class="header">
+  <img src="${logoSrc}" alt="Slnko Logo" />
 
+  <div class="right">
+  <div class="po-number">PO No: ${orderNumber || "-"}</div>
+    <div class="project-id">Project ID: ${project_id || "-"}</div>
+  </div>
+</div>
+
+  
+ 
   <div class="meta">
     <div>
       <div class="label">Vendor Name</div>
-      <div class="value">${vendorName || "-"}</div>
+      <div class="value">Vendor Team</div>
     </div>
     <div>
       <div class="label">Order Date</div>
-      <div class="value">${fmtDateTime(orderDateISO)}</div>
+      <div class="value">${fmtDateTime(date)}</div>
     </div>
   </div>
 
@@ -265,7 +296,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName) {
             // Footer: line 1 => Page X of Y, line 2 => system-generated notice
             footerTemplate: `
             <div style="width:100%; text-align:center; margin-top:10px;">
-  <hr style="border: 0; border-top: 1px solid #000; margin-bottom:6px;"/>
+  <hr style="border: 0; border-top: 1px solid #475569; margin-bottom:6px;"/>
 
   <div style="font-size:10px; color:#6b7280; padding:4px 0;">
     Page <span class="pageNumber"></span> of <span class="totalPages"></span>
