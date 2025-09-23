@@ -96,11 +96,11 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   .po-number{ color:inherit; }
 
   .meta{
-    display:grid; grid-template-columns:1fr 1fr; gap:10px 36px;
+    display:flex; grid-template-columns:1fr 1fr; gap:10px 36px; justify-content:space-between;
     padding:14px 0 12px 30px; margin-bottom:12px; border-top:1px solid var(--line);
   }
   .meta .label{ color:var(--muted); font-weight:700; font-size:12px; margin-bottom:2px; }
-  .meta .value{ font-weight:600; }
+  .meta .value{ font-weight:600; padding-right: 30px;}
 
   table{ width:100%; border-collapse:collapse; margin-top:14px; border:1px solid var(--line); border: 0 !important;            /* no outer box */
   border-collapse: collapse; 
@@ -167,7 +167,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   align-items:center;
   justify-content:space-between;  /* pushes the right block to the edge */
   gap:16px;
-  margin:0 0 8px 0;
+  margin:0 30px 8px 30px;
 }
 
 .header img{
