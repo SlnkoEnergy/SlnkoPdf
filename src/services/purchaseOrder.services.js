@@ -52,9 +52,9 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
             <td>${item?.category || "NA"}</td>
             <td>${item.product}</td>
             <td class="num">${item?.quantity ?? 0}</td>
-            <td class="num">Rs. ${(item?.unit_price)}</td>
+            <td class="num">Rs. ${(item?.unit_price).toLocaleString("en-IN")}</td>
             <td>${item.taxes}%</td>
-            <td class="num">Rs. ${(item?.amount)}</td>
+            <td class="num">Rs. ${(item?.amount).toLocaleString("en-IN")}</td>
           </tr>
         `;
       })
@@ -252,19 +252,19 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   <div class="totals-card">
   <div class="tc-row">
     <span class="tc-label">Untaxed Amount:</span>
-    <span class="tc-num">Rs. ${untax}</span>
+    <span class="tc-num">Rs. ${untax.toLocaleString("en-IN")}</span>
   </div>
 
   <div class="tc-row">
     <span class="tc-label">Tax:</span>
-    <span class="tc-num">Rs. ${(gstAmt)}</span>
+    <span class="tc-num">Rs. ${(gstAmt.toLocaleString("en-IN"))}</span>
   </div>
 
   <hr class="tc-divider"/>
 
   <div class="tc-row total">
     <span class="tc-label">Total:</span>
-    <span class="tc-num">Rs. ${totalAmt}</span>
+    <span class="tc-num">Rs. ${totalAmt.toLocaleString("en-IN")}</span>
   </div>
 </div>
   </div>
