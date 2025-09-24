@@ -7,13 +7,13 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   try {
     // ---------- helpers ----------
 
-    const fmtINR = (n) =>
-      new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(Number(n || 0));
+    // const fmtINR = (n) =>
+    //   new Intl.NumberFormat("en-IN", {
+    //     style: "currency",
+    //     currency: "INR",
+    //     minimumFractionDigits: 2,
+    //     maximumFractionDigits: 2,
+    //   }).format(Number(n || 0));
 
     const fmtDateTime = (d) => {
       if (!d) return "-";
@@ -21,10 +21,8 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
       const dd = String(dt.getDate()).padStart(2, "0");
       const mm = String(dt.getMonth() + 1).padStart(2, "0");
       const yyyy = dt.getFullYear();
-      const hh = String(dt.getHours()).padStart(2, "0");
-      const mi = String(dt.getMinutes()).padStart(2, "0");
-      const ss = String(dt.getSeconds()).padStart(2, "0");
-      return `${dd}/${mm}/${yyyy} ${hh}:${mi}:${ss}`;
+      
+      return `${dd}/${mm}/${yyyy} `;
     };
 
     // ---------- meta ----------
@@ -33,12 +31,16 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
     // ---------- totals ----------
     let totalAmt = 0;
     let gstAmt = 0;
+    let untax = 0;
 
     (Purchase || []).forEach((item) => {
       const base = Number(item?.amount || 0);
-      const rate = Number(item?.taxes || 0); // percent
+      const rate = Number((item?.quantity * item?.unit_price * item?.taxes))/100;
+      // const rate = Number(item?.taxes || 0); // percent
+      const untax_amount = Number(item?.quantity * item?.unit_price)
       totalAmt += base;
-      gstAmt += (base * rate) / 100;
+      gstAmt += rate;
+      untax += untax_amount;
     });
 
     // ---------- rows ----------
@@ -47,15 +49,12 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
 
         return `
           <tr>
-            <td>${i + 1}</td>
             <td>${item?.category || "NA"}</td>
             <td>${item.product}</td>
-            <td>${item.description}</td>
-            <td>${item.make}</td>
             <td class="num">${item?.quantity ?? 0}</td>
-            <td class="num">${fmtINR(item?.unit_price)}</td>
-            <td>${item.taxes}</td>
-            <td class="num">${fmtINR(item?.amount)}</td>
+            <td class="num">₹${(item?.unit_price)}</td>
+            <td>${item.taxes}%</td>
+            <td class="num">₹${(item?.amount)}</td>
           </tr>
         `;
       })
@@ -90,7 +89,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
     font:14px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji";
     font-variant-numeric: tabular-nums;
   }
-  body{ padding:24px 28px; }
+  body{ font-family: Arial, sans-serif; padding:24px 28px; }
 
   /* Title and PO number same color */
   .po-title{ font-size:26px; font-weight:500; margin:0 0 0px 30px; color:var(--brand); }
@@ -98,10 +97,10 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
 
   .meta{
     display:flex; grid-template-columns:1fr 1fr; gap:10px 36px; justify-content:space-between;
-    padding:14px 0 12px 30px; margin-bottom:12px; border-top:1px solid var(--line);
+    padding:14px 0 12px 8px; margin-bottom:12px; border-top:1px solid var(--line);
   }
   .meta .label{ color:var(--muted); font-weight:700; font-size:12px; margin-bottom:2px; }
-  .meta .value{ font-weight:600; padding-right: 30px;}
+  .meta .value{ font-weight:600; padding-right: 8px;}
 
   table{ width:100%; border-collapse:collapse; margin-top:14px; border:1px solid var(--line); border: 0 !important;            /* no outer box */
   border-collapse: collapse; 
@@ -112,7 +111,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   }
   tbody td{ padding:12px; border-bottom:1px solid var(--line); vertical-align:top; }
   tbody tr:nth-child(even) td{ background:#fcfdff; }
-  .num{ text-align:right; white-space:nowrap; }
+  .num{ text-align:left; white-space:nowrap; }
   tbody td:nth-child(3){ color:var(--ink); }
   tbody td:nth-child(3) .rate{ display:block; color:var(--muted); font-size:12px; }
 
@@ -168,7 +167,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   align-items:center;
   justify-content:space-between;  /* pushes the right block to the edge */
   gap:16px;
-  margin:0 30px 8px 30px;
+  margin:0 8px 8px 8px;
 }
 
 .header img{
@@ -192,14 +191,14 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
 .project-id{
   margin:0;
   font-size:14px;
-  font-weight:600;
+  font-weight:400;
   color:#475569;          /* slate-ish */
 }
 
 .po-number{
   margin:0;
   font-size:18px;
-  font-weight:700;
+  font-weight:500;
   color:#1F487C;          /* your brand color */
 }
 
@@ -218,7 +217,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   <img src="${logoSrc}" alt="Slnko Logo" />
 
   <div class="right">
-  <div class="po-number">PO No: ${orderNumber || "-"}</div>
+  <div class="po-number"> ${orderNumber ? `PO No: ${orderNumber}` : "REQUEST FOR QUOTATION (RFQ)"}</div>
     <div class="project-id">Project ID: ${project_id || "-"}</div>
   </div>
 </div>
@@ -239,15 +238,12 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   <table>
     <thead>
       <tr>
-        <th style="width:6%">S.No</th>
-        <th style="width:44%">Category</th>
-        <th style="width:10%">Product</th>
-        <th style="width:16%">Brief Description</th>
-        <th style="width:8%">Make</th>
-        <th style="width:8%">Qty</th>
-        <th style="width:8%">Unit Price</th>
-        <th style="width:8%">Taxes</th>
-        <th style="width:8%">Amount</th>
+        <th style="width:20%">Category</th>
+        <th style="width:20%">Product</th>
+        <th style="width:12%">Qty</th>
+        <th style="width:12%">Unit Price</th>
+        <th style="width:12%">Taxes</th>
+        <th style="width:12%">Amount</th>
       </tr>
     </thead>
     <tbody>${itemsHTML}</tbody>
@@ -256,19 +252,19 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   <div class="totals-card">
   <div class="tc-row">
     <span class="tc-label">Untaxed Amount:</span>
-    <span class="tc-num">${fmtINR(totalAmt)}</span>
+    <span class="tc-num">₹${untax}</span>
   </div>
 
   <div class="tc-row">
     <span class="tc-label">Tax:</span>
-    <span class="tc-num">${fmtINR(gstAmt)}</span>
+    <span class="tc-num">₹${(gstAmt)}</span>
   </div>
 
   <hr class="tc-divider"/>
 
   <div class="tc-row total">
     <span class="tc-label">Total:</span>
-    <span class="tc-num">${fmtINR(totalAmt + gstAmt)}</span>
+    <span class="tc-num">₹${totalAmt}</span>
   </div>
 </div>
   </div>
