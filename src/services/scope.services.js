@@ -1,35 +1,16 @@
 const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
-const { PDFDocument } = require("pdf-lib");
 
 async function generateScopeSheet(scope, options = {}) {
   const {
     project = {}
   } = options;
-
-  // Summary: total quantities by category
-  const summaryMap = {};
-  (scope.items || []).forEach((item) => {
-    const category = item.category || "Others";
-    const qty = Number(item.quantity) || 0;
-    if (!summaryMap[category]) summaryMap[category] = { quantity: 0 };
-    summaryMap[category].quantity += qty;
-  });
-
-  const summaryRows = Object.entries(summaryMap)
-    .map(([category, data]) => `
-      <tr>
-        <td style="border:1px solid #000; padding:6px; text-align:left;">${category}</td>
-        <td style="border:1px solid #000; padding:6px; text-align:right;">${data.quantity}</td>
-      </tr>
-    `).join("");
-
   const itemsHTML = (scope.items || [])
     .map((item, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td>${item.category || "-"}</td>
+        <td>${item.name || "-"}</td>
         <td>${item.type ? item.type.charAt(0).toUpperCase() + item.type.slice(1).toLowerCase() : "-"}</td>
         <td>${item.quantity ?? "-"}</td>
         <td>${item.uom || "-"}</td>
@@ -71,7 +52,7 @@ async function generateScopeSheet(scope, options = {}) {
       <div class="header">
         <img src="${logoSrc}" alt="Slnko Logo" />
       </div>
-      <h2 class="title">Scope Sheet</h2>
+      <h2 class="title">Scope Of Work</h2>
       <div class="info">
         <div>
           <strong>Project Name:</strong> ${project.name || "-"}<br>
@@ -88,7 +69,7 @@ async function generateScopeSheet(scope, options = {}) {
         <thead>
           <tr>
             <th>S.No</th>
-            <th>Category</th>
+            <th>Name</th>
             <th>Type</th>
             <th>Tentative Quantity</th>
             <th>UoM</th>
