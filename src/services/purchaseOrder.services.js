@@ -3,48 +3,49 @@ const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
 
-async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, date, project_id) {
-    try {
-        // ---------- helpers ----------
-        const fmtINR = (n) =>
-            new Intl.NumberFormat("en-IN", {
-                style: "currency",
-                currency: "INR",
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            }).format(Number(n || 0));
+async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, date, project_id, message) {
+  try {
+    // ---------- helpers ----------
 
-        const fmtDateTime = (d) => {
-            if (!d) return "-";
-            const dt = new Date(d);
-            const dd = String(dt.getDate()).padStart(2, "0");
-            const mm = String(dt.getMonth() + 1).padStart(2, "0");
-            const yyyy = dt.getFullYear();
-            const hh = String(dt.getHours()).padStart(2, "0");
-            const mi = String(dt.getMinutes()).padStart(2, "0");
-            const ss = String(dt.getSeconds()).padStart(2, "0");
-            return `${dd}/${mm}/${yyyy} ${hh}:${mi}:${ss}`;
-        };
+    const fmtINR = (n) =>
+      new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Number(n || 0));
 
-        // ---------- meta ----------
-        const orderDateISO = new Date().toISOString();
+    const fmtDateTime = (d) => {
+      if (!d) return "-";
+      const dt = new Date(d);
+      const dd = String(dt.getDate()).padStart(2, "0");
+      const mm = String(dt.getMonth() + 1).padStart(2, "0");
+      const yyyy = dt.getFullYear();
+      const hh = String(dt.getHours()).padStart(2, "0");
+      const mi = String(dt.getMinutes()).padStart(2, "0");
+      const ss = String(dt.getSeconds()).padStart(2, "0");
+      return `${dd}/${mm}/${yyyy} ${hh}:${mi}:${ss}`;
+    };
 
-        // ---------- totals ----------
-        let totalAmt = 0;
-        let gstAmt = 0;
+    // ---------- meta ----------
+    const orderDateISO = new Date().toISOString();
 
-        (Purchase || []).forEach((item) => {
-            const base = Number(item?.amount || 0);
-            const rate = Number(item?.taxes || 0); // percent
-            totalAmt += base;
-            gstAmt += (base * rate) / 100;
-        });
+    // ---------- totals ----------
+    let totalAmt = 0;
+    let gstAmt = 0;
 
-        // ---------- rows ----------
-        const itemsHTML = (Purchase || [])
-            .map((item, i) => {
+    (Purchase || []).forEach((item) => {
+      const base = Number(item?.amount || 0);
+      const rate = Number(item?.taxes || 0); // percent
+      totalAmt += base;
+      gstAmt += (base * rate) / 100;
+    });
 
-                return `
+    // ---------- rows ----------
+    const itemsHTML = (Purchase || [])
+      .map((item, i) => {
+
+        return `
           <tr>
             <td>${i + 1}</td>
             <td>${item?.category || "NA"}</td>
@@ -57,14 +58,14 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
             <td class="num">${fmtINR(item?.amount)}</td>
           </tr>
         `;
-            })
-            .join("");
+      })
+      .join("");
 
-        const logoData = fs.readFileSync(path.resolve(__dirname, "../assets/1.png"));
-        const logoSrc = `data:image/png;base64, ${logoData.toString("base64")}`;
+    const logoData = fs.readFileSync(path.resolve(__dirname, "../assets/1.png"));
+    const logoSrc = `data:image/png;base64, ${logoData.toString("base64")}`;
 
-        // ---------- HTML ----------
-        const htmlContent = `
+    // ---------- HTML ----------
+    const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -227,7 +228,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   <div class="meta">
     <div>
       <div class="label">Vendor Name</div>
-      <div class="value">Vendor Team</div>
+      <div class="value">${vendorName}</div>
     </div>
     <div>
       <div class="label">Order Date</div>
@@ -272,29 +273,34 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
 </div>
   </div>
 
+  <div style="padding: 20px 0px 20px 30px; text-align: left;">
+  ${message ? message : ""}
+</div>
+
+
 </body>
 </html>
 `;
 
-        // ---------- Puppeteer ----------
-        const browser = await puppeteer.launch({
-            headless: true,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-        });
+    // ---------- Puppeteer ----------
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
 
-        const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
 
-        const pdfBuffer = await page.pdf({
-            format: "A4",
-            printBackground: true,
-            preferCSSPageSize: true,
-            margin: { top: "6mm", bottom: "20mm", left: "2mm", right: "2mm" },
-            displayHeaderFooter: true,
-            headerTemplate: "<div></div>",
-            // Footer: line 1 => Page X of Y, line 2 => system-generated notice
-            footerTemplate: `
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      preferCSSPageSize: true,
+      margin: { top: "6mm", bottom: "20mm", left: "2mm", right: "2mm" },
+      displayHeaderFooter: true,
+      headerTemplate: "<div></div>",
+      // Footer: line 1 => Page X of Y, line 2 => system-generated notice
+      footerTemplate: `
             <div style="width:100%; text-align:center; margin-top:10px;">
   <hr style="border: 0; border-top: 1px solid #475569; margin-bottom:6px;"/>
 
@@ -306,14 +312,14 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   </div>
 </div>
       `,
-        });
+    });
 
-        await browser.close();
-        return pdfBuffer;
-    } catch (error) {
-        console.error(error);
-        throw error;
-    }
+    await browser.close();
+    return pdfBuffer;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
 }
 
 module.exports = generatePurchaseOrderSheet;

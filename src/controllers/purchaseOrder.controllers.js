@@ -3,13 +3,13 @@ const generatePurchaseOrderSheet = require("../services/purchaseOrder.services")
 const purchaseOrderPdf = async (req, res) => {
     try {
 
-        const { Purchase = [], orderNumber, vendorName, Date, project_id } = req.body;
+        const { Purchase = [], orderNumber, vendorName, Date, project_id, message } = req.body;
 
         if (!Array.isArray(Purchase) || Purchase.length === 0) {
             return res.status(400).json({ message: "No Purchase Data Provided" });
         }
 
-        const finalPdfBuffer = await  generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, Date, project_id);
+        const finalPdfBuffer = await  generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, Date, project_id, message);
 
         res.set({
             "Content-Type": "application/pdf",
