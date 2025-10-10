@@ -7,7 +7,8 @@ const scopePdfRoutes = require("./src/routes/scope.routes");
 const poapproval = require("./src/routes/poapproval.routes")
 const paymenthistory = require ("./src/routes/paymenthistory.routes");
 const router = require("./src/routes/customerpaymentroutes");
-const purchaseOrderRoutes = require("./src/routes/purchaseOrder.routes")
+const purchaseOrderRoutes = require("./src/routes/purchaseOrder.routes");
+const projectSchedule = require("./src/routes/projectSchedule.routes");
 config({ path: "./.env" });
 
 app.use(cors({ origin: "*" }));
@@ -22,6 +23,7 @@ app.use("/v1/po-approve", poapproval);
 app.use("/v1/payment-history", paymenthistory );
 app.use("/v1/Customer-summary", router);
 app.use("/v1/purchase-order", purchaseOrderRoutes);
+app.use("/v1/projects", projectSchedule);
 app.listen(PORT, () => {
   console.log(`Slnko app is running on port ${PORT}`);
 });
