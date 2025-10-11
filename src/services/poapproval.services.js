@@ -20,7 +20,7 @@ function formatINR(num) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
-  return `₹ ${formatted.replace(/\.0+$/, "")}`;
+  return `&#8377; ${formatted.replace(/\.0+$/, "")}`;
 }
 
 
@@ -134,8 +134,6 @@ async function generatePaymentApprovalSheet(Pos) {
     day: "2-digit",
     month: "short",
     year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
   });
 
   const htmlContent = `
@@ -151,7 +149,7 @@ async function generatePaymentApprovalSheet(Pos) {
     }
     * { box-sizing: border-box; }
     body {
-      font-family: Arial, Helvetica, sans-serif;
+      font-family: "Noto Sans", "DejaVu Sans", "Segoe UI Symbol", Arial, Helvetica, sans-serif;
       margin: 0;
       color: #111827;
       -webkit-print-color-adjust: exact;
@@ -264,7 +262,7 @@ async function generatePaymentApprovalSheet(Pos) {
     </div>
 
     <div class="meta">
-      <div>Report Date: <strong>${escapeHtml(reportDate)}</strong></div>
+      <div>Approval Date: <strong>${escapeHtml(reportDate)}</strong></div>
       <div>Total Requested: <strong>${formatINR(totalAmount)}</strong></div>
     </div>
 
