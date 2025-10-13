@@ -1,4 +1,3 @@
-
 const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
@@ -12,6 +11,34 @@ function escapeHtml(str = "") {
     .replace(/'/g, "&#039;");
 }
 
+const FONT_CANDIDATES = [
+  path.resolve(__dirname, "../assets/fonts/DejaVuSans.woff2"),
+  path.resolve(__dirname, "../assets/fonts/DejaVuSans.ttf"),
+  path.resolve(__dirname, "../assets/fonts/NotoSansSymbols2-Regular.ttf"),
+];
+
+function loadEmbeddedFontCSS() {
+  for (const p of FONT_CANDIDATES) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const buf = fs.readFileSync(p);
+      const ext = path.extname(p).toLowerCase();
+      const isWoff2 = ext === ".woff2";
+      const mime = isWoff2 ? "font/woff2" : "font/ttf";
+      const format = isWoff2 ? "woff2" : "truetype";
+      const b64 = buf.toString("base64");
+      return `
+@font-face{
+  font-family:'PdfSans';
+  src:url('data:${mime};base64,${b64}') format('${format}');
+  font-weight:normal;
+  font-style:normal;
+  font-display:swap;
+}`;
+    } catch (_) {}
+  }
+  return "";
+}
 
 function formatINR(num) {
   const n = Number(num);
@@ -20,20 +47,16 @@ function formatINR(num) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
-  return `&#8377; ${formatted.replace(/\.0+$/, "")}`;
+  return `₹ ${formatted.replace(/\.0+$/, "")}`;
 }
-
-
 
 function toNumber(val) {
   const n = Number(val);
   return Number.isFinite(n) ? n : 0;
 }
 
-
 async function generatePaymentApprovalSheet(Pos) {
   const rows = Array.isArray(Pos) ? Pos : [];
-
 
   const summaryMap = {};
   let totalAmount = 0;
@@ -45,7 +68,6 @@ async function generatePaymentApprovalSheet(Pos) {
     summaryMap[category] += amt;
     totalAmount += amt;
   }
-
 
   const summaryEntries = Object.entries(summaryMap).sort(([a, av], [b, bv]) => {
     if (a === "Others") return 1;
@@ -70,15 +92,18 @@ async function generatePaymentApprovalSheet(Pos) {
     </tr>
   `;
 
-
   const itemsHTML = rows
     .slice()
     .sort((a, b) => {
       const ad = a?.dbt_date ? new Date(a.dbt_date).getTime() : 0;
       const bd = b?.dbt_date ? new Date(b.dbt_date).getTime() : 0;
       if (ad !== bd) return ad - bd;
-      const ap = `${a?.project_code || ""}${a?.project_name || ""}`.toLowerCase();
-      const bp = `${b?.project_code || ""}${b?.project_name || ""}`.toLowerCase();
+      const ap = `${a?.project_code || ""}${
+        a?.project_name || ""
+      }`.toLowerCase();
+      const bp = `${b?.project_code || ""}${
+        b?.project_name || ""
+      }`.toLowerCase();
       return ap.localeCompare(bp);
     })
     .map((po, i) => {
@@ -120,7 +145,6 @@ async function generatePaymentApprovalSheet(Pos) {
     })
     .join("");
 
-
   const logoPath = path.resolve(__dirname, "../assets/1.png");
   const checkPath = path.resolve(__dirname, "../assets/2.png");
   const logoSrc = fs.existsSync(logoPath)
@@ -136,6 +160,8 @@ async function generatePaymentApprovalSheet(Pos) {
     year: "numeric",
   });
 
+  const embeddedFontCSS = loadEmbeddedFontCSS();
+
   const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -143,13 +169,15 @@ async function generatePaymentApprovalSheet(Pos) {
   <meta charset="utf-8" />
   <title>Payment Approval Sheet</title>
   <style>
+  ${embeddedFontCSS}
     @page {
       size: A4;
       margin: 14mm 8mm 16mm 8mm;
     }
     * { box-sizing: border-box; }
     body {
-      font-family: "Noto Sans", "DejaVu Sans", "Segoe UI Symbol", Arial, Helvetica, sans-serif;
+        font-family: 'PdfSans', 'Noto Sans Devanagari', 'Noto Sans',
+                 'DejaVu Sans', 'Segoe UI Symbol', Arial, Helvetica, sans-serif;
       margin: 0;
       color: #111827;
       -webkit-print-color-adjust: exact;
@@ -268,7 +296,11 @@ async function generatePaymentApprovalSheet(Pos) {
 
     <div class="title-wrap">
       <h2 class="title">Payment Approval Sheet</h2>
-      ${checkSrc ? `<img class="title-icon" src="${checkSrc}" alt="check icon" />` : ""}
+      ${
+        checkSrc
+          ? `<img class="title-icon" src="${checkSrc}" alt="check icon" />`
+          : ""
+      }
     </div>
 
     <table>
@@ -283,7 +315,10 @@ async function generatePaymentApprovalSheet(Pos) {
         </tr>
       </thead>
       <tbody>
-        ${itemsHTML || `<tr><td colspan="6" class="td-left">No records found.</td></tr>`}
+        ${
+          itemsHTML ||
+          `<tr><td colspan="6" class="td-left">No records found.</td></tr>`
+        }
       </tbody>
     </table>
 
