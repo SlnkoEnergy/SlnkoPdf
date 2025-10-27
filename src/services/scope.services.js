@@ -47,6 +47,10 @@ const COLUMN_REGISTRY = {
   scope: { label: "Scope", get: (r) => titlePreserveAcronyms(r.scope || "") },
   quantity: { label: "Qty", get: (r) => r.quantity ?? "" },
   uom: { label: "UoM", get: (r) => r.uom ?? "" },
+  remarks: {
+    label: "Remarks",
+    get: (r) => fmtDate(r.remarks),
+  },
   commitment_date: {
     label: "Commitment Date",
     get: (r) => fmtDate(r.commitment_date),
@@ -61,9 +65,7 @@ const COLUMN_REGISTRY = {
   },
 };
 
-// Default column set (matches your previous fixed columns)
 const DEFAULT_COLUMN_KEYS = [
-  "type",
   "scope",
   "commitment_date",
   "po_number",
