@@ -3,7 +3,7 @@ const generateCustomerPaymentSheet = require("../services/customerpaymentsummary
 const CustomerPaymentpdf = async (req, res) => {
   try {
     const {
-      projectDetails = {},  
+      projectDetails = {},
       creditHistorys = [],
       DebitHistorys = [],
       purchaseHistorys = [],
@@ -12,15 +12,16 @@ const CustomerPaymentpdf = async (req, res) => {
       balanceSummary = {},
     } = req.body || {};
 
-  
-    const credits   = Array.isArray(creditHistorys) ? creditHistorys : [];
-    const debits    = Array.isArray(DebitHistorys) ? DebitHistorys : [];
+    const credits = Array.isArray(creditHistorys) ? creditHistorys : [];
+    const debits = Array.isArray(DebitHistorys) ? DebitHistorys : [];
     const purchases = Array.isArray(purchaseHistorys) ? purchaseHistorys : [];
-    const sales     = Array.isArray(saleHistorys) ? saleHistorys : [];
-    const adjusts   = Array.isArray(AdjustmentHistorys) ? AdjustmentHistorys : [];
-    const summary   = balanceSummary && typeof balanceSummary === "object" ? balanceSummary : {};
+    const sales = Array.isArray(saleHistorys) ? saleHistorys : [];
+    const adjusts = Array.isArray(AdjustmentHistorys) ? AdjustmentHistorys : [];
+    const summary =
+      balanceSummary && typeof balanceSummary === "object"
+        ? balanceSummary
+        : {};
 
-  
     const pdfBuffer = await generateCustomerPaymentSheet(
       projectDetails,
       credits,
@@ -32,7 +33,10 @@ const CustomerPaymentpdf = async (req, res) => {
     );
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", 'attachment; filename="Payment_History.pdf"');
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="Payment_History.pdf"'
+    );
     res.setHeader("Content-Length", Buffer.byteLength(pdfBuffer));
     res.send(pdfBuffer);
   } catch (error) {

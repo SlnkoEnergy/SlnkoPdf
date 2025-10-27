@@ -1,13 +1,14 @@
-
 const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
 
+/* ---------------- helpers ---------------- */
 function inr(n) {
   const num = Number(n || 0);
   return num.toLocaleString("en-IN");
 }
-const sumBy = (arr, key) => (arr || []).reduce((a, x) => a + Number(x?.[key] || 0), 0);
+const sumBy = (arr, key) =>
+  (arr || []).reduce((a, x) => a + Number(x?.[key] || 0), 0);
 
 const fmtLongDate = (d) =>
   new Date(d || Date.now()).toLocaleDateString("en-IN", {
@@ -47,6 +48,40 @@ function loadEmbeddedFontCSS() {
   return "";
 }
 
+/* ---- value helpers ---- */
+const safeNum = (v) => Number(v || 0);
+
+function derivePO(r) {
+  const basic = safeNum(r.po_basic ?? r.poBasic ?? r.basic ?? r.po_value_basic);
+  const total = safeNum(r.po_total ?? r.poTotal ?? r.total ?? r.po_value);
+  let gst = safeNum(r.po_gst ?? r.poGst ?? r.gst);
+  if (!gst && total && basic) gst = total - basic;
+  const resolvedTotal = total || basic + gst;
+  return { basic, gst, total: resolvedTotal };
+}
+function deriveBilled(r) {
+  const basic = safeNum(
+    r.billed_basic ?? r.billedBasic ?? r.total_billed_basic
+  );
+  const total = safeNum(
+    r.billed_total ?? r.billedTotal ?? r.total_billed_value
+  );
+  let gst = safeNum(r.billed_gst ?? r.billedGst ?? r.total_billed_gst);
+  if (!gst && total && basic) gst = total - basic;
+  const resolvedTotal = total || basic + gst;
+  return { basic, gst, total: resolvedTotal };
+}
+/* Sales row: we keep Bill Basic separate, and group Value/GST/Total under “Sales” */
+function deriveSale(r) {
+  const billBasic = safeNum(r.bill_basic ?? r.billBasic ?? r.basic ?? 0);
+  const value = safeNum(r.value ?? r.sale_value ?? 0);
+  let gst = safeNum(r.gst ?? 0);
+  let total = safeNum(r.total_sales ?? r.total ?? 0);
+  if (!total) total = value + gst;
+  if (!gst && total && value) gst = total - value;
+  return { billBasic, value, gst, total };
+}
+
 /* --------------------- main PDF generator -------------------- */
 async function generateCustomerPaymentSheet(
   projectOrCredits,
@@ -58,8 +93,15 @@ async function generateCustomerPaymentSheet(
   reportDateOr
 ) {
   let projectDetails = {};
-  let creditHistorys, DebitHistorys, purchaseHistorys, saleHistorys, AdjustmentHistorys, balanceSummary, reportDate;
+  let creditHistorys,
+    DebitHistorys,
+    purchaseHistorys,
+    saleHistorys,
+    AdjustmentHistorys,
+    balanceSummary,
+    reportDate;
 
+  // support both param shapes (as in your original)
   if (Array.isArray(projectOrCredits)) {
     creditHistorys = projectOrCredits;
     DebitHistorys = DebitHistorysOr || [];
@@ -80,16 +122,27 @@ async function generateCustomerPaymentSheet(
   }
 
   try {
-    /* ---- totals ---- */
+    /* ---- totals (credits/debits/adjust) ---- */
     const creditTotal = sumBy(creditHistorys, "amount");
     const debitTotal = sumBy(DebitHistorys, "amount");
-    const pur_po = sumBy(purchaseHistorys, "po_value");
-    const pur_adv = sumBy(purchaseHistorys, "Advance_paid");
-    const pur_rem = sumBy(purchaseHistorys, "remain_amount");
-    const pur_bill = sumBy(purchaseHistorys, "total_billed_value");
-    const sale_val_total = sumBy(saleHistorys, "sale_value");
     const adj_credit_total = sumBy(AdjustmentHistorys, "credit_adjust");
     const adj_debit_total = sumBy(AdjustmentHistorys, "debit_adjust");
+
+    // PO table column totals
+    let po_basic_sum = 0,
+      po_gst_sum = 0,
+      po_total_sum = 0,
+      adv_paid_sum = 0,
+      adv_remaining_sum = 0,
+      billed_basic_sum = 0,
+      billed_gst_sum = 0,
+      billed_total_sum = 0;
+
+    // Sales totals (Bill Basic separate + grouped “Sales” totals)
+    let sales_bill_basic_sum = 0,
+      sales_value_sum = 0,
+      sales_gst_sum = 0,
+      sales_total_sum = 0;
 
     const PD = {
       code: projectDetails?.code ?? "-",
@@ -100,7 +153,7 @@ async function generateCustomerPaymentSheet(
       project_kwp: projectDetails?.project_kwp ?? "-",
     };
 
-    /* ---- table rows ---- */
+    /* ---- section rows ---- */
     const creditRows = (creditHistorys || [])
       .map(
         (r, i) => `
@@ -119,7 +172,7 @@ async function generateCustomerPaymentSheet(
       <tr>
         <td class="nowrap">${i + 1}</td>
         <td class="left nowrap">${r.date || ""}</td>
-        <td class="left nowrap">${r.po_number || ""}</td>
+        <td class="left">${r.po_number || ""}</td>
         <td class="left">${r.paid_for || ""}</td>
         <td class="left">${r.paid_to || ""}</td>
         <td class="left nowrap">${r.utr || ""}</td>
@@ -129,33 +182,69 @@ async function generateCustomerPaymentSheet(
       .join("");
 
     const purchaseRows = (purchaseHistorys || [])
-      .map(
-        (r, i) => `
+      .map((r, i) => {
+        const po = derivePO(r);
+        const bill = deriveBilled(r);
+        const advPaid = safeNum(r.Advance_paid ?? r.advance_paid);
+        const advRemaining = safeNum(r.remain_amount ?? r.advance_remaining);
+
+        // accumulate totals
+        po_basic_sum += po.basic;
+        po_gst_sum += po.gst;
+        po_total_sum += po.total;
+        adv_paid_sum += advPaid;
+        adv_remaining_sum += advRemaining;
+        billed_basic_sum += bill.basic;
+        billed_gst_sum += bill.gst;
+        billed_total_sum += bill.total;
+
+        return `
       <tr>
         <td class="nowrap">${i + 1}</td>
         <td class="left nowrap">${r.po_number || ""}</td>
-        <td class="left">${r.vendor || ""}</td>
-        <td class="left">${r.item_name || ""}</td>
-        <td class="num nowrap">₹ ${inr(r.po_value)}</td>
-        <td class="num nowrap">₹ ${inr(r.Advance_paid)}</td>
-        <td class="num nowrap">₹ ${inr(r.remain_amount)}</td>
-        <td class="num nowrap">₹ ${inr(r.total_billed_value)}</td>
-      </tr>`
-      )
+        <td class="left wrap">${r.vendor || ""}</td>
+        <td class="left">${r.item_name || r.item || "N/A"}</td>
+
+        <td class="num nowrap">₹ ${inr(po.basic)}</td>
+        <td class="num nowrap">₹ ${inr(po.gst)}</td>
+        <td class="num nowrap">₹ ${inr(po.total)}</td>
+
+        <td class="num nowrap">₹ ${inr(advPaid)}</td>
+        <td class="num nowrap">₹ ${inr(advRemaining)}</td>
+
+        <td class="num nowrap">₹ ${inr(bill.basic)}</td>
+        <td class="num nowrap">₹ ${inr(bill.gst)}</td>
+        <td class="num nowrap">₹ ${inr(bill.total)}</td>
+      </tr>`;
+      })
       .join("");
 
     const salesRows = (saleHistorys || [])
-      .map(
-        (r, i) => `
+      .map((r, i) => {
+        const s = deriveSale(r);
+
+        sales_bill_basic_sum += s.billBasic;
+        sales_value_sum += s.value;
+        sales_gst_sum += s.gst;
+        sales_total_sum += s.total;
+
+        return `
       <tr>
         <td class="nowrap">${i + 1}</td>
         <td class="left nowrap">${r.po_number || ""}</td>
         <td class="left nowrap">${r.converted_at || ""}</td>
         <td class="left">${r.vendor || ""}</td>
         <td class="left">${r.item || ""}</td>
-        <td class="num nowrap">₹ ${inr(r.sale_value)}</td>
-      </tr>`
-      )
+
+        <!-- Bill Basic is OUTSIDE the “Sales” grouped box -->
+        <td class="num nowrap">₹ ${inr(s.billBasic)}</td>
+
+        <!-- Grouped Sales columns (Value, GST, Total) -->
+        <td class="num nowrap sales-col">₹ ${inr(s.value)}</td>
+        <td class="num nowrap sales-col">₹ ${inr(s.gst)}</td>
+        <td class="num nowrap sales-col highlight">₹ ${inr(s.total)}</td>
+      </tr>`;
+      })
       .join("");
 
     const adjustRows = (AdjustmentHistorys || [])
@@ -174,7 +263,8 @@ async function generateCustomerPaymentSheet(
       )
       .join("");
 
-    const bs = Array.isArray(balanceSummary) ? balanceSummary[0] || {} : balanceSummary || {};
+    /* ---- balance summary like the web ---- */
+    const bs = balanceSummary || {};
     const pick = (...keys) => {
       for (const k of keys) {
         const v = bs?.[k];
@@ -183,39 +273,92 @@ async function generateCustomerPaymentSheet(
       return 0;
     };
 
-    const billingType = bs.billing_type || projectDetails.billing_type || "-";
-    const bsLines = [
-      { no: "1",  label: "Total Received",                             val: pick("total_received", "totalCredited") },
-      { no: "2",  label: "Total Return",                               val: pick("total_return", "totalReturn") },
-      { no: "3",  label: "Net Balance ([1]-[2])",                      val: pick("netBalance", "net_balance"), cls: "muted" },
-      { no: "4",  label: "Total Advance Paid to Vendors",              val: pick("total_advance_paid", "totalAdvancePaidToVendors", "totalAdvancePaid") },
-      { no: "4A", label: "Total Adjustment (Debit-Credit)",            val: pick("total_adjustment", "totalAdjustment") },
-      { no: "5",  label: "Balance With Slnko ([3]-[4]-[4A])",          val: pick("balance_with_slnko", "balanceWithSlnko"), cls: "accent" },
-      { no: "6",  label: "Total PO Basic Value",                       val: pick("total_po_basic", "totalPoBasic") },
-      { no: "7",  label: "GST Value as per PO",                        val: pick("gst_as_po_basic", "gstAsPoBasic") },
-      { no: "8",  label: "Total PO with GST",                          val: pick("total_po_with_gst", "totalPoWithGst") },
-      { no: "8A", label: "Total Sales with GST",                       val: pick("total_sales", "totalSale") },
-      { no: "9",  label: `GST (${billingType})`,                       val: pick("gst_with_type_percentage", "gstWithTypePercentage") },
-      { no: "10", label: "Total Billed Value",                         val: pick("total_billed_value", "totalBilledValue") },
-      { no: "11", label: "Net Advance Paid ([4]-[10])",                val: pick("net_advanced_paid", "netAdvancePaid") },
-      { no: "12", label: "Balance Payable to Vendors ([8]-[10]-[11])", val: pick("balance_payable_to_vendors", "balancePayableToVendors"), cls: "accent" },
-      { no: "13", label: "TCS as Applicable",                          val: pick("tcs_as_applicable", "tcsAsApplicable") },
-      { no: "14", label: "Extra GST Recoverable from Client ([8]-[6])",val: pick("extraGST", "extra_gst") },
-      { no: "15", label: "Balance Required ([5]-[12]-[13])",           val: pick("balance_required", "balanceRequired"), cls: "strong" },
+    const section1 = [
+      {
+        no: 1,
+        label: "Total Received",
+        val: pick("total_received"),
+        cls: "highlight1",
+      },
+      {
+        no: 2,
+        label: "Total Return",
+        val: pick("total_return"),
+        cls: "highlight1",
+      },
+      {
+        no: 3,
+        label: "Net Balance [(1)-(2)]",
+        val: pick("netBalance", "net_balance"),
+        cls: "highlight2 strong",
+      },
+      {
+        no: 4,
+        label: "Total Advances Paid to Vendors",
+        val: pick("total_advance_paid", "totalAdvancePaid"),
+      },
     ];
 
-    const bsRows = bsLines.map(line => `
-      <tr class="${line.cls ? line.cls : ""}">
-        <td class="sno nowrap">${line.no}</td>
-        <td class="left">${line.label}</td>
-        <td class="val num nowrap">₹ ${inr(line.val)}</td>
-      </tr>
-    `).join("");
+    const billingRows = [
+      {
+        no: 5,
+        label: "Invoice issued to customer",
+        val: pick("invoice_issued_to_customer", "total_sales_value"),
+      },
+      {
+        no: 6,
+        label: "Bills received, yet to be invoiced to customer",
+        val: pick("bills_received_yet_to_invoice", "total_unbilled_sales"),
+      },
+      {
+        no: 7,
+        label: "Advances left after bills received [4-5-6]",
+        val: pick("advance_left_after_billed"),
+      },
+      {
+        no: 8,
+        label: "Adjustment (Debit-Credit)",
+        val: pick("total_adjustment"),
+      },
+      {
+        no: 9,
+        label: "Balance With Slnko [3 - 5 - 6 - 7 - 8]",
+        val: pick("netBalanceWithSlnko", "balance_with_slnko"),
+        cls: "highlight2 strong",
+      },
+    ];
+
+    const section1Rows = section1
+      .map(
+        (x) => `
+      <tr class="${x.cls || ""}">
+        <td class="sno">${x.no}</td>
+        <td class="left">${x.label}</td>
+        <td class="num nowrap">₹ ${inr(x.val)}</td>
+      </tr>`
+      )
+      .join("");
+
+    const billingRowsHtml = billingRows
+      .map(
+        (x) => `
+      <tr class="${x.cls || ""}">
+        <td class="sno">${x.no}</td>
+        <td class="left">${x.label}</td>
+        <td class="num nowrap">₹ ${inr(x.val)}</td>
+      </tr>`
+      )
+      .join("");
 
     /* ---- assets ---- */
-    const logoData = fs.readFileSync(path.resolve(__dirname, "../assets/1.png"));
+    const logoData = fs.readFileSync(
+      path.resolve(__dirname, "../assets/1.png")
+    );
     const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`;
     const fontFaceCSS = loadEmbeddedFontCSS();
+
+    const PAGE_FORMAT = "A4";
+    const ORIENTATION = "landscape";
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -223,26 +366,22 @@ async function generateCustomerPaymentSheet(
 <head>
   <meta charset="utf-8" />
   <style>
-    @page { size: A4; margin: 10mm 8mm 18mm 8mm; }
+    @page { size: ${PAGE_FORMAT} ${ORIENTATION}; margin: 10mm 8mm 18mm 8mm; }
     ${fontFaceCSS}
     * { box-sizing: border-box; }
-    /* Use embedded font first so ₹ renders everywhere */
     body { font-family: 'PdfSans', Arial, sans-serif; margin: 0; color: #121417; }
 
-    /* header */
     .header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:6px 4px 8px; border-bottom:1px solid #DDE3EA; }
     .header img { max-height: 60px; object-fit: cover; }
     .brand-title { margin:0; font-size:17px; font-weight:800; letter-spacing:.5px; }
     .brand-sub { margin:0; font-size:12px; color:#4B5563; line-height:1.3; }
     .brand-sub a { color:#2563EB; text-decoration:none; }
 
-    /* title + date */
     .date-style { margin: 15px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
     .titlebar { margin-top: 10px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
     .titlebar h1 { grid-column: 2 / 3; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: .4px; }
     .report-date { grid-column: 3 / 4; justify-self: end; font-size: 12px; color: #4B5563; }
 
-    /* project details */
     .pd { border:1px solid #E5E7EB; border-radius:8px; padding:10px; margin-top:10px; page-break-inside: avoid; }
     .pd h3 { margin:0 0 8px 0; font-size:13px; font-weight:800; color:#1F2937; }
     .pd-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px 12px; }
@@ -250,35 +389,53 @@ async function generateCustomerPaymentSheet(
     .label { font-size:10px; color:#6B7280; margin:0 0 2px 0; }
     .value { font-size:12px; font-weight:600; margin:0; color:#111827; }
 
-    /* sections */
-    .section { margin: 16px 0 8px; page-break-inside: avoid; break-inside: avoid; }
-    .section-title { margin:0; font-size:15px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:#111827; break-after: avoid; }
-
-    /* tables */
-    table { width:100%; border-collapse:collapse; border-spacing:0; font-size:11px; margin:6px 0 10px; }
+    table { width:100%; border-collapse:collapse; border-spacing:0; font-size:11px; margin:6px 0 10px; table-layout: fixed; }
     thead th { background:#F3F4F6; color:#111827; border:1px solid #D1D5DB; padding:6px; text-align:center; font-weight:700; }
     td, th { border:1px solid #E5E7EB; padding:6px; text-align:center; vertical-align:top; background:#fff; }
     td.left, th.left { text-align:left; }
-    td.right, th.right { text-align:right; }
+    .nowrap { white-space: nowrap; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
     tfoot td { font-weight:800; background:#FAFAFA; }
     tr { break-inside: avoid; page-break-inside: avoid; }
 
-    /* print stability */
-    .table-fixed { table-layout: fixed; }
-    .nowrap { white-space: nowrap; word-break: keep-all; hyphens: none; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    /* long vendor names should wrap nicely without overflowing */
+    .wrap { white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
 
-    /* Balance summary */
+    /* grouped header looks */
+    .po-table thead th[colspan] { text-transform:none; font-weight:800; background:#EEF2F7; }
+    .right.strong, .num.strong { font-weight:800; }
+
+    /* Sales group shading */
+    .sales-group th.group-head { background:#EEF2F7; }
+    .sales-col { background:#F7FAFF; }                /* inside the Sales box */
+    .sales-col.highlight { background:#E7F1FF; font-weight:700; }
+
     .bs-wrap { width: 68%; margin-top: 30px; }
     .bs .sno { width:42px; text-align:center; }
     .bs .val { text-align:right; white-space:nowrap; }
     .bs tr.muted td { background:#F5F6F8; }
     .bs tr.accent td { background:#EAF7EE; }
     .bs tr.strong td { background:#EAF2FF; font-weight:800; }
+    /* --- force section onto a new PDF page --- */
+.pagebreak { break-before: page; page-break-before: always; }
+
+/* keep the whole card together on one page */
+.bs-card { border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; margin-top:10px;
+  page-break-inside: avoid; break-inside: avoid; }
+.bs-card table { border:none; page-break-inside: avoid; break-inside: avoid; }
+.bs-card tr, .bs-card td, .bs-card th { page-break-inside: avoid; break-inside: avoid; }
+
+/* Balance Summary coloring to match your screenshot */
+.sno { width:42px; text-align:center; }
+.highlight1 td { background:#FFF4BF; }   /* soft yellow rows (1,2) */
+.highlight2 td { background:#FFE08A; }   /* stronger yellow rows (3, 9) */
+.strong td { font-weight:800; }
+.billing-title td { background:#F3F4F6; text-align:center; font-weight:700; border-top:2px solid #d1d5db; }
+
 
     @media print {
       thead { display: table-header-group !important; }
-      tfoot { display: table-row-group !important; } /* totals only once at end */
+      tfoot { display: table-row-group !important; }
       table { page-break-inside: auto; }
       tr, td, th { page-break-inside: avoid !important; break-inside: avoid !important; }
       .section, .pd { page-break-inside: avoid !important; break-inside: avoid !important; }
@@ -288,7 +445,9 @@ async function generateCustomerPaymentSheet(
 <body>
 
   <!-- Date + header -->
-  <div class="date-style"><div></div><div class="report-date">${fmtLongDate(reportDate)}</div></div>
+  <div class="date-style"><div></div><div class="report-date">${fmtLongDate(
+    reportDate
+  )}</div></div>
   <div class="header">
     <img src="${logoSrc}" alt="SLNKO Logo"/>
     <div style="display:flex; flex-direction:column;">
@@ -298,104 +457,180 @@ async function generateCustomerPaymentSheet(
     </div>
   </div>
 
-  <!-- Title -->
   <div class="titlebar"><div></div><h1>Customer Payment Summary</h1></div>
 
   <!-- Project details -->
   <div class="pd">
     <h3>Project Details</h3>
     <div class="pd-grid">
-      <div class="field"><p class="label">Project ID</p><p class="value">${PD.code}</p></div>
-      <div class="field"><p class="label">Project Name</p><p class="value">${PD.name}</p></div>
-      <div class="field"><p class="label">Client Name</p><p class="value">${PD.customer_name}</p></div>
-      <div class="field"><p class="label">Group Name</p><p class="value">${PD.p_group}</p></div>
-      <div class="field"><p class="label">Plant Location</p><p class="value">${PD.site_address}</p></div>
-      <div class="field"><p class="label">Plant Capacity (MW)</p><p class="value">${PD.project_kwp}</p></div>
+      <div class="field"><p class="label">Project ID</p><p class="value">${
+        PD.code
+      }</p></div>
+      <div class="field"><p class="label">Project Name</p><p class="value">${
+        PD.name
+      }</p></div>
+      <div class="field"><p class="label">Client Name</p><p class="value">${
+        PD.customer_name
+      }</p></div>
+      <div class="field"><p class="label">Group Name</p><p class="value">${
+        PD.p_group
+      }</p></div>
+      <div class="field"><p class="label">Plant Location</p><p class="value">${
+        PD.site_address
+      }</p></div>
+      <div class="field"><p class="label">Plant Capacity (MW)</p><p class="value">${
+        PD.project_kwp
+      }</p></div>
     </div>
   </div>
 
   <!-- CREDIT -->
   <div class="section"><h2 class="section-title">Credit History</h2></div>
-  <table class="table-fixed">
-    <colgroup><col style="width:44px"><col style="width:100px"><col style="width:180px"><col style="width:120px"></colgroup>
+  <table>
+    <colgroup><col style="width:44px"><col style="width:100px"><col><col style="width:120px"></colgroup>
     <thead>
       <tr><th>S.No</th><th>Credit Date</th><th class="left">Mode</th><th>Amount (₹)</th></tr>
     </thead>
     <tbody>${creditRows || ""}</tbody>
     <tfoot>
-      <tr><td colspan="3" class="right">Total Credited</td><td class="num nowrap">₹ ${inr(creditTotal)}</td></tr>
+      <tr><td colspan="3" class="left" style="text-align:right;">Total Credited</td><td class="num nowrap">₹ ${inr(
+        creditTotal
+      )}</td></tr>
     </tfoot>
   </table>
 
   <!-- DEBIT -->
   <div class="section"><h2 class="section-title">Debit History</h2></div>
-  <table class="table-fixed">
-    <colgroup><col style="width:44px"><col style="width:100px"><col style="width:140px"><col style="width:150px"><col style="width:170px"><col style="width:110px"><col style="width:150px"></colgroup>
+  <table>
+    <colgroup><col style="width:44px"><col style="width:100px"><col style="width:140px"><col><col><col style="width:110px"><col style="width:150px"></colgroup>
     <thead>
       <tr><th>S.No</th><th>Date</th><th>PO Number</th><th class="left">Paid For</th><th class="left">Paid To</th><th>UTR</th><th>Amount (₹)</th></tr>
     </thead>
     <tbody>${debitRows || ""}</tbody>
     <tfoot>
-      <tr><td colspan="6" class="right">Total Debited</td><td class="num nowrap">₹ ${inr(debitTotal)}</td></tr>
+      <tr><td colspan="6" class="left" style="text-align:right;">Total Debited</td><td class="num nowrap">₹ ${inr(
+        debitTotal
+      )}</td></tr>
     </tfoot>
   </table>
 
   <!-- PURCHASE -->
   <div class="section"><h2 class="section-title">Purchase History</h2></div>
-  <table class="table-fixed">
-    <colgroup><col style="width:44px"><col style="width:200px"><col style="width:170px"><col style="width:200px"><col style="width:110px"><col style="width:120px"><col style="width:120px"><col style="width:130px"></colgroup>
+  <table class="po-table">
+    <colgroup>
+      <col style="width:44px">
+      <col style="width:160px">
+      <col style="width:180px">
+      <col style="width:180px">
+      <col style="width:110px"><col style="width:110px"><col style="width:120px">
+      <col style="width:130px"><col style="width:140px">
+      <col style="width:110px"><col style="width:110px"><col style="width:120px">
+    </colgroup>
     <thead>
-      <tr><th>S.No</th><th>PO Number</th><th class="left">Vendor</th><th class="left">Item Name</th><th>PO Value (₹)</th><th>Advance Paid (₹)</th><th>Remaining (₹)</th><th>Total Billed (₹)</th></tr>
+      <tr>
+        <th rowspan="2">S.No</th>
+        <th rowspan="2" class="left">PO Number</th>
+        <th rowspan="2" class="left">Vendor</th>
+        <th rowspan="2" class="left">Item</th>
+        <th colspan="3">PO Value (₹)</th>
+        <th rowspan="2">Advance Paid (₹)</th>
+        <th rowspan="2">Advance Remaining (₹)</th>
+        <th colspan="3">Total Billed (₹)</th>
+      </tr>
+      <tr>
+        <th>Basic (₹)</th><th>GST (₹)</th><th>Total (₹)</th>
+        <th>Basic (₹)</th><th>GST (₹)</th><th>Total (₹)</th>
+      </tr>
     </thead>
     <tbody>${purchaseRows || ""}</tbody>
     <tfoot>
       <tr>
-        <td colspan="4" class="right">Totals</td>
-        <td class="num nowrap">₹ ${inr(pur_po)}</td>
-        <td class="num nowrap">₹ ${inr(pur_adv)}</td>
-        <td class="num nowrap">₹ ${inr(pur_rem)}</td>
-        <td class="num nowrap">₹ ${inr(pur_bill)}</td>
+        <td colspan="4" class="left" style="text-align:right;font-weight:800;">Total:</td>
+        <td class="num nowrap strong">₹ ${inr(po_basic_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(po_gst_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(po_total_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(adv_paid_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(adv_remaining_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(billed_basic_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(billed_gst_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(billed_total_sum)}</td>
       </tr>
     </tfoot>
   </table>
 
-  <!-- SALES -->
+  <!-- SALES (Bill Basic OUTSIDE the grouped Sales box) -->
   <div class="section"><h2 class="section-title">Sales History</h2></div>
-  <table class="table-fixed">
-    <colgroup><col style="width:44px"><col style="width:200px"><col style="width:100px"><col style="width:190px"><col style="width:220px"><col style="width:120px"></colgroup>
+  <table class="sales-group">
+    <colgroup>
+      <col style="width:44px">
+      <col style="width:200px">
+      <col style="width:100px">
+      <col style="width:190px">
+      <col style="width:220px">
+      <col style="width:120px"><!-- Bill Basic (standalone) -->
+      <col style="width:120px"><col style="width:110px"><col style="width:140px"><!-- grouped: Value, GST, Total -->
+    </colgroup>
     <thead>
-      <tr><th>S.No</th><th>PO Number</th><th>Conversion Date</th><th class="left">Vendor</th><th class="left">Item Name</th><th>Sales Value (₹)</th></tr>
+      <tr>
+        <th rowspan="2">S.No</th>
+        <th rowspan="2">PO Number</th>
+        <th rowspan="2">Conversion Date</th>
+        <th rowspan="2" class="left">Vendor</th>
+        <th rowspan="2" class="left">Item Name</th>
+        <th rowspan="2">Bill Basic (₹)</th>
+        <th class="group-head" colspan="3">Sales</th>
+      </tr>
+      <tr>
+        <th class="group-head">Value (₹)</th>
+        <th class="group-head">GST (₹)</th>
+        <th class="group-head">Total Sales (₹)</th>
+      </tr>
     </thead>
     <tbody>${salesRows || ""}</tbody>
     <tfoot>
-      <tr><td colspan="5" class="right">Total Sales</td><td class="num nowrap">₹ ${inr(sale_val_total)}</td></tr>
+      <tr>
+        <td colspan="5" class="left" style="text-align:right;font-weight:800;">Total:</td>
+        <td class="num nowrap strong">₹ ${inr(sales_bill_basic_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(sales_value_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(sales_gst_sum)}</td>
+        <td class="num nowrap strong">₹ ${inr(sales_total_sum)}</td>
+      </tr>
     </tfoot>
   </table>
 
   <!-- ADJUSTMENT -->
   <div class="section"><h2 class="section-title">Adjustment History</h2></div>
-  <table class="table-fixed">
-    <colgroup><col style="width:44px"><col style="width:100px"><col style="width:140px"><col style="width:120px"><col style="width:140px"><col style="width:auto"><col style="width:120px"><col style="width:120px"></colgroup>
+  <table>
+    <colgroup><col style="width:44px"><col style="width:100px"><col style="width:140px"><col style="width:120px"><col style="width:140px"><col><col style="width:120px"><col style="width:120px"></colgroup>
     <thead>
       <tr><th>S.No</th><th>Date</th><th class="left">Reason</th><th>PO Number</th><th class="left">Paid For</th><th class="left">Description</th><th>Credit Adjust (₹)</th><th>Debit Adjust (₹)</th></tr>
     </thead>
     <tbody>${adjustRows || ""}</tbody>
     <tfoot>
-      <tr><td colspan="6" class="right">Totals</td><td class="num nowrap">₹ ${inr(adj_credit_total)}</td><td class="num nowrap">₹ ${inr(adj_debit_total)}</td></tr>
+      <tr><td colspan="6" class="left" style="text-align:right;">Totals</td><td class="num nowrap">₹ ${inr(
+        adj_credit_total
+      )}</td><td class="num nowrap">₹ ${inr(adj_debit_total)}</td></tr>
     </tfoot>
   </table>
 
-  <!-- BALANCE SUMMARY -->
-  <div class="section bs-wrap">
-    <h2 class="section-title">Balance Summary</h2>
-    <div class="bs">
-      <table class="table-fixed">
-        <colgroup><col style="width:42px"><col style="width:auto"><col style="width:140px"></colgroup>
-        <thead><tr><th style="width:42px">S.No.</th><th class="left">Description</th><th>Value</th></tr></thead>
-        <tbody>${bsRows || ""}</tbody>
-      </table>
-    </div>
-  </div>
+
+ <!-- always start Balance Summary on a new page -->
+<div class="pagebreak"></div>
+
+<h3 style="margin:12px 0 6px;">Balance Summary</h3>
+<div class="bs-card">
+  <table>
+    <thead>
+      <tr><th style="width:42px;">S.No.</th><th class="left">Description</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      ${section1Rows}
+      <tr class="billing-title"><td colspan="3">Billing Details</td></tr>
+      ${billingRowsHtml}
+    </tbody>
+  </table>
+</div>
+
 
 </body>
 </html>
@@ -410,7 +645,8 @@ async function generateCustomerPaymentSheet(
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
     const pdfBuffer = await page.pdf({
-      format: "A4",
+      format: PAGE_FORMAT,
+      landscape: ORIENTATION === "landscape",
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: `<div style="font-size:1px;"></div>`,
