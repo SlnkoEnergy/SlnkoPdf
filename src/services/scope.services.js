@@ -1,3 +1,4 @@
+// services/scope.services.js
 const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
@@ -29,7 +30,7 @@ const prettyStatus = (s) => {
     .join(" ");
 };
 
-// dd/MM/yyyy
+// dd-MM-yyyy
 const fmtDate = (v) => {
   if (!v) return "-";
   const d = new Date(v);
@@ -40,6 +41,80 @@ const fmtDate = (v) => {
   return `${dd}-${mm}-${yyyy}`;
 };
 
+// ---- Column registry (extend as needed) ----
+const COLUMN_REGISTRY = {
+  type: { label: "Type", get: (r) => titlePreserveAcronyms(r.type || "") },
+  scope: { label: "Scope", get: (r) => titlePreserveAcronyms(r.scope || "") },
+  quantity: { label: "Qty", get: (r) => r.quantity ?? "" },
+  uom: { label: "UoM", get: (r) => r.uom ?? "" },
+  commitment_date: {
+    label: "Commitment Date",
+    get: (r) => fmtDate(r.commitment_date),
+  },
+  po_number: { label: "PO Number", get: (r) => r.po_number || "-" },
+  po_status: { label: "PO Status", get: (r) => prettyStatus(r.po_status) },
+  po_date: { label: "PO Date", get: (r) => fmtDate(r.po_date) },
+  etd: { label: "ETD", get: (r) => fmtDate(r.etd) },
+  delivered_date: {
+    label: "Delivered Date",
+    get: (r) => fmtDate(r.delivered_date),
+  },
+};
+
+// Default column set (matches your previous fixed columns)
+const DEFAULT_COLUMN_KEYS = [
+  "type",
+  "scope",
+  "commitment_date",
+  "po_number",
+  "po_status",
+  "po_date",
+  "etd",
+  "delivered_date",
+];
+
+// Build a normalized list of column defs from options.columns
+function resolveColumns(options = {}) {
+  const inputCols = Array.isArray(options.columns) ? options.columns : null;
+
+  let keysAndLabels;
+  if (inputCols && inputCols.length) {
+    // accepts ["po_number"] or [{key:"po_number", label:"PO Number"}]
+    keysAndLabels = inputCols.map((c) =>
+      typeof c === "string"
+        ? { key: c, label: null }
+        : { key: c.key, label: c.label ?? null }
+    );
+  } else {
+    keysAndLabels = DEFAULT_COLUMN_KEYS.map((k) => ({ key: k, label: null }));
+  }
+
+  const defs = [];
+  const seen = new Set();
+  for (const { key: rawKey, label } of keysAndLabels) {
+    const key = rawKey && String(rawKey).trim();
+    if (!key || seen.has(key)) continue;
+    const reg = COLUMN_REGISTRY[key];
+    if (!reg) continue;
+    defs.push({
+      key,
+      label: label || reg.label,
+      get: reg.get,
+    });
+    seen.add(key);
+  }
+
+  // Ensure at least one column
+  if (!defs.length) {
+    defs.push({
+      key: "po_number",
+      label: COLUMN_REGISTRY.po_number.label,
+      get: COLUMN_REGISTRY.po_number.get,
+    });
+  }
+  return defs;
+}
+
 async function generateScopeSheet(scope, options = {}) {
   const {
     project = {},
@@ -49,25 +124,25 @@ async function generateScopeSheet(scope, options = {}) {
     camMember = "-",
     projectStatus = "-",
     pdfOptions = {},
+    columns, // may be undefined; resolveColumns handles fallback
   } = options;
 
-  // Build table rows
+  const columnDefs = resolveColumns({ columns });
+
+  // Build table rows (supports child rows)
   const itemsHTML = (rows || [])
-    .map(
-      (r, i) => `
-      <tr${r._isChild ? ' class="child-row"' : ""}>
-        <td>${r._isChild ? "" : r.sr_no || i + 1}</td>
-        <td class="left">${titlePreserveAcronyms(r.name || "")}</td>
-        <td>${titlePreserveAcronyms(r.type || "")}</td>
-        <td>${titlePreserveAcronyms(r.scope || "")}</td>
-        <td>${fmtDate(r.commitment_date)} </td>
-        <td>${r.po_number || "-"}</td>
-        <td>${prettyStatus(r.po_status)}</td>
-        <td>${fmtDate(r.po_date)}</td>
-        <td>${fmtDate(r.etd)}</td>
-        <td>${fmtDate(r.delivered_date)}</td>
-      </tr>`
-    )
+    .map((r, i) => {
+      const dynamicTds = columnDefs
+        .map((c) => `<td class="cell">${c.get(r) ?? ""}</td>`)
+        .join("");
+
+      return `
+        <tr${r._isChild ? ' class="child-row"' : ""}>
+          <td class="sno">${r._isChild ? "" : r.sr_no || i + 1}</td>
+          <td class="left cell">${titlePreserveAcronyms(r.name || "")}</td>
+          ${dynamicTds}
+        </tr>`;
+    })
     .join("");
 
   // Logo
@@ -81,9 +156,10 @@ async function generateScopeSheet(scope, options = {}) {
     <head>
       <meta charset="utf-8" />
       <style>
+        * { box-sizing: border-box; }
         body {
           font-family: Arial, sans-serif;
-          margin: 40px;
+          margin: 24px;
           font-size: 12px;
           color: #000;
         }
@@ -120,35 +196,44 @@ async function generateScopeSheet(scope, options = {}) {
         .project-info {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 20px;
+          margin-bottom: 16px;
           font-size: 12px;
         }
         .project-info td {
           padding: 6px 8px;
           border: 1px solid #000;
+          vertical-align: top;
         }
         .project-info td.label {
           font-weight: bold;
           width: 25%;
           background-color: #f5f5f5;
         }
+
         table {
           width: 100%;
           border-collapse: collapse;
           font-size: 11px;
+          table-layout: fixed; /* ensures wrapping works correctly */
         }
         th, td {
           border: 1px solid #000;
-          padding: 5px 6px;
+          padding: 6px 7px;
           text-align: center;
           vertical-align: top;
+          background: #fff;
+          word-break: break-word;
+          overflow-wrap: anywhere;
+          white-space: normal;
         }
-        th {
+        thead th {
           background-color: #f1f1f1;
+          font-weight: 700;
         }
-        td.left {
-          text-align: left;
-        }
+        td.left { text-align: left; }
+        .sno { width: 48px; }
+        td.left.cell { min-width: 160px; }
+        tr.child-row td { background: #fafafa; }
       </style>
     </head>
     <body>
@@ -163,37 +248,37 @@ async function generateScopeSheet(scope, options = {}) {
       <table class="project-info">
         <tr>
           <td class="label">Project Name:</td>
-          <td>${titlePreserveAcronyms(project.name || "-")}</td>
+          <td class="cell left">${titlePreserveAcronyms(
+            project.name || "-"
+          )}</td>
           <td class="label">Project Code:</td>
-          <td>${project.code || "-"}</td>
+          <td class="cell">${project.code || "-"}</td>
         </tr>
         <tr>
           <td class="label">Created Date:</td>
-          <td>${fmtDate(scope.createdAt)}</td>
+          <td class="cell">${fmtDate(scope.createdAt)}</td>
           <td class="label">CAM Person Name:</td>
-          <td>${titlePreserveAcronyms(camMember)}</td>
+          <td class="cell left">${titlePreserveAcronyms(camMember)}</td>
         </tr>
         <tr>
           <td class="label">Last Updated Date:</td>
-          <td>${fmtDate(scope.updatedAt)}</td>
+          <td class="cell">${fmtDate(scope.updatedAt)}</td>
           <td class="label">Project Status:</td>
-          <td>${prettyStatus(projectStatus) || "-"}</td>
+          <td class="cell">${prettyStatus(projectStatus) || "-"}</td>
         </tr>
       </table>
 
       <table>
+        <colgroup>
+          <col style="width:48px" />
+          <col style="width:auto" />
+          ${columnDefs.map(() => `<col style="width:auto" />`).join("")}
+        </colgroup>
         <thead>
           <tr>
             <th>S.No</th>
-            <th>Category Name</th>
-            <th>Type</th>
-            <th>Scope</th>
-            <th>Commitment Date</th>
-            <th>PO Number</th>
-            <th>PO Status</th>
-            <th>PO Date</th>
-            <th>ETD</th>
-            <th>Delivered Date</th>
+            <th class="left">Category Name</th>
+            ${columnDefs.map((c) => `<th>${c.label}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
@@ -218,6 +303,7 @@ async function generateScopeSheet(scope, options = {}) {
     landscape: !!pdfOptions.landscape,
     printBackground: true,
     margin: { top: "10mm", bottom: "10mm", left: "5mm", right: "5mm" },
+    preferCSSPageSize: true,
   });
 
   await browser.close();
