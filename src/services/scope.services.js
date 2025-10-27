@@ -48,6 +48,7 @@ async function generateScopeSheet(scope, options = {}) {
     rows = [],
     camMember = "-",
     projectStatus = "-",
+    pdfOptions = {},
   } = options;
 
   // Build table rows
@@ -59,6 +60,7 @@ async function generateScopeSheet(scope, options = {}) {
         <td class="left">${titlePreserveAcronyms(r.name || "")}</td>
         <td>${titlePreserveAcronyms(r.type || "")}</td>
         <td>${titlePreserveAcronyms(r.scope || "")}</td>
+        <td>${fmtDate(r.commitment_date)} </td>
         <td>${r.po_number || "-"}</td>
         <td>${prettyStatus(r.po_status)}</td>
         <td>${fmtDate(r.po_date)}</td>
@@ -88,8 +90,8 @@ async function generateScopeSheet(scope, options = {}) {
         .watermark {
           position: fixed;
           top: 50%;
-          left: 10%;
-          transform: rotate(-45deg);
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(-45deg);
           font-size: 90px;
           color: rgba(0,0,0,0.05);
           z-index: -1;
@@ -156,7 +158,7 @@ async function generateScopeSheet(scope, options = {}) {
         <img src="${logoSrc}" alt="Slnko Logo" />
       </div>
 
-      <h2 class="title">SCOPE OF WORK</h2>
+      <h2 class="title">Material Status</h2>
 
       <table class="project-info">
         <tr>
@@ -183,9 +185,10 @@ async function generateScopeSheet(scope, options = {}) {
         <thead>
           <tr>
             <th>S.No</th>
-            <th>Item Name</th>
+            <th>Category Name</th>
             <th>Type</th>
             <th>Scope</th>
+            <th>Commitment Date</th>
             <th>PO Number</th>
             <th>PO Status</th>
             <th>PO Date</th>
@@ -211,7 +214,8 @@ async function generateScopeSheet(scope, options = {}) {
   await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
   const pdfBuffer = await page.pdf({
-    format: "A4",
+    format: pdfOptions.format || "A4",
+    landscape: !!pdfOptions.landscape,
     printBackground: true,
     margin: { top: "10mm", bottom: "10mm", left: "5mm", right: "5mm" },
   });
