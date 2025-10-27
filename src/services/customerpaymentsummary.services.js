@@ -74,9 +74,9 @@ function deriveBilled(r) {
 /* Sales row: we keep Bill Basic separate, and group Value/GST/Total under “Sales” */
 function deriveSale(r) {
   const billBasic = safeNum(r.bill_basic ?? r.billBasic ?? r.basic ?? 0);
-  const value = safeNum(r.value ?? r.sale_value ?? 0);
-  let gst = safeNum(r.gst ?? 0);
-  let total = safeNum(r.total_sales ?? r.total ?? 0);
+  const value = safeNum(r.value ?? r.sales_basic ?? 0);
+  let gst = safeNum(r.gst_on_sales ?? 0);
+  let total = safeNum(r.total_sales_value ?? r.total ?? 0);
   if (!total) total = value + gst;
   if (!gst && total && value) gst = total - value;
   return { billBasic, value, gst, total };
@@ -263,16 +263,48 @@ async function generateCustomerPaymentSheet(
       )
       .join("");
 
-    /* ---- balance summary like the web ---- */
+    /* ---- balance summary computed values ---- */
+
     const bs = balanceSummary || {};
     const pick = (...keys) => {
       for (const k of keys) {
         const v = bs?.[k];
-        if (v !== undefined && v !== null) return v;
+        if (v !== undefined && v !== null) return Number(v) || 0;
       }
       return 0;
     };
 
+    // 4 → Total Advances Paid to Vendors (from PO table)
+    const total_advances_paid_vendors = adv_paid_sum;
+
+    // 5 → Invoice issued to customer (Sales total)
+    const invoice_issued_to_customer = sales_total_sum;
+
+    // 6 → Bills received, yet to be invoiced to customer (Billed total)
+    const bills_received_yet_to_invoice = billed_total_sum;
+
+    // 7 → Advances left after bills received [4 - 5 - 6]
+    const advances_left_after_billed =
+      bills_received_yet_to_invoice < total_advances_paid_vendors
+        ? total_advances_paid_vendors -
+          invoice_issued_to_customer -
+          bills_received_yet_to_invoice
+        : 0;
+    // 8 → Adjustment (Debit - Credit)
+    const adjustment_debit_minus_credit = adj_debit_total - adj_credit_total;
+
+    // 3 → Net Balance from upstream balanceSummary (kept as-is)
+    const net_balance_val = pick("netBalance", "net_balance");
+
+    // 9 → Balance With Slnko [3 - 5 - 6 - 7 - 8]
+    const balance_with_slnko_calc =
+      net_balance_val -
+      invoice_issued_to_customer -
+      bills_received_yet_to_invoice -
+      advances_left_after_billed -
+      adjustment_debit_minus_credit;
+
+    /* ---- rows 1–4 (first section) ---- */
     const section1 = [
       {
         no: 1,
@@ -289,41 +321,42 @@ async function generateCustomerPaymentSheet(
       {
         no: 3,
         label: "Net Balance [(1)-(2)]",
-        val: pick("netBalance", "net_balance"),
+        val: net_balance_val,
         cls: "highlight2 strong",
       },
       {
         no: 4,
         label: "Total Advances Paid to Vendors",
-        val: pick("total_advance_paid", "totalAdvancePaid"),
+        val: total_advances_paid_vendors, // ← computed from PO table
       },
     ];
 
+    /* ---- billing rows 5–9 (fully computed) ---- */
     const billingRows = [
       {
         no: 5,
         label: "Invoice issued to customer",
-        val: pick("invoice_issued_to_customer", "total_sales_value"),
+        val: invoice_issued_to_customer, // ← Sales total
       },
       {
         no: 6,
         label: "Bills received, yet to be invoiced to customer",
-        val: pick("bills_received_yet_to_invoice", "total_unbilled_sales"),
+        val: bills_received_yet_to_invoice, // ← Billed total
       },
       {
         no: 7,
         label: "Advances left after bills received [4-5-6]",
-        val: pick("advance_left_after_billed"),
+        val: advances_left_after_billed, // ← 4 - 5 - 6
       },
       {
         no: 8,
         label: "Adjustment (Debit-Credit)",
-        val: pick("total_adjustment"),
+        val: adjustment_debit_minus_credit, // ← Debit - Credit
       },
       {
         no: 9,
         label: "Balance With Slnko [3 - 5 - 6 - 7 - 8]",
-        val: pick("netBalanceWithSlnko", "balance_with_slnko"),
+        val: balance_with_slnko_calc, // ← computed from 3,5,6,7,8
         cls: "highlight2 strong",
       },
     ];
