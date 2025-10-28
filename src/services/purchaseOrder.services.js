@@ -3,17 +3,16 @@ const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
 
-async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, date, project_id, message) {
+async function generatePurchaseOrderSheet(
+  Purchase,
+  orderNumber,
+  vendorName,
+  date,
+  project_id,
+  message
+) {
   try {
     // ---------- helpers ----------
-
-    // const fmtINR = (n) =>
-    //   new Intl.NumberFormat("en-IN", {
-    //     style: "currency",
-    //     currency: "INR",
-    //     minimumFractionDigits: 2,
-    //     maximumFractionDigits: 2,
-    //   }).format(Number(n || 0));
 
     const fmtDateTime = (d) => {
       if (!d) return "-";
@@ -21,7 +20,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
       const dd = String(dt.getDate()).padStart(2, "0");
       const mm = String(dt.getMonth() + 1).padStart(2, "0");
       const yyyy = dt.getFullYear();
-      
+
       return `${dd}/${mm}/${yyyy} `;
     };
 
@@ -35,9 +34,10 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
 
     (Purchase || []).forEach((item) => {
       const base = Number(item?.amount || 0);
-      const rate = Number((item?.quantity * item?.unit_price * item?.taxes))/100;
+      const rate =
+        Number(item?.quantity * item?.unit_price * item?.taxes) / 100;
       // const rate = Number(item?.taxes || 0); // percent
-      const untax_amount = Number(item?.quantity * item?.unit_price)
+      const untax_amount = Number(item?.quantity * item?.unit_price);
       totalAmt += base;
       gstAmt += rate;
       untax += untax_amount;
@@ -46,13 +46,14 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
     // ---------- rows ----------
     const itemsHTML = (Purchase || [])
       .map((item, i) => {
-
         return `
           <tr>
             <td>${item?.category || "NA"}</td>
             <td>${item.product}</td>
             <td class="num">${item?.quantity ?? 0}</td>
-            <td class="num">Rs. ${(item?.unit_price).toLocaleString("en-IN")}</td>
+            <td class="num">Rs. ${(item?.unit_price).toLocaleString(
+              "en-IN"
+            )}</td>
             <td>${item.taxes}%</td>
             <td class="num">Rs. ${(item?.amount).toLocaleString("en-IN")}</td>
           </tr>
@@ -60,7 +61,9 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
       })
       .join("");
 
-    const logoData = fs.readFileSync(path.resolve(__dirname, "../assets/1.png"));
+    const logoData = fs.readFileSync(
+      path.resolve(__dirname, "../assets/1.png")
+    );
     const logoSrc = `data:image/png;base64, ${logoData.toString("base64")}`;
 
     // ---------- HTML ----------
@@ -217,7 +220,9 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   <img src="${logoSrc}" alt="Slnko Logo" />
 
   <div class="right">
-  <div class="po-number"> ${orderNumber ? `PO No: ${orderNumber}` : "REQUEST FOR QUOTATION (RFQ)"}</div>
+  <div class="po-number"> ${
+    orderNumber ? `PO No: ${orderNumber}` : "REQUEST FOR QUOTATION (RFQ)"
+  }</div>
     <div class="project-id">Project ID: ${project_id || "-"}</div>
   </div>
 </div>
@@ -227,7 +232,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
   <div class="meta">
     <div>
       <div class="label">Vendor Name</div>
-      <div class="value">${vendorName}</div>
+      <div class="value">${vendorName?.name}</div>
     </div>
     <div>
       <div class="label">Order Date</div>
@@ -257,7 +262,7 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
 
   <div class="tc-row">
     <span class="tc-label">Tax:</span>
-    <span class="tc-num">Rs. ${(gstAmt.toLocaleString("en-IN"))}</span>
+    <span class="tc-num">Rs. ${gstAmt.toLocaleString("en-IN")}</span>
   </div>
 
   <hr class="tc-divider"/>
@@ -286,7 +291,6 @@ async function generatePurchaseOrderSheet(Purchase, orderNumber, vendorName, dat
 
     const page = await browser.newPage();
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
-
 
     const pdfBuffer = await page.pdf({
       format: "A4",
