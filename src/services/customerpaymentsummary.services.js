@@ -127,6 +127,8 @@ async function generateCustomerPaymentSheet(
     const debitTotal = sumBy(DebitHistorys, "amount");
     const adj_credit_total = sumBy(AdjustmentHistorys, "credit_adjust");
     const adj_debit_total = sumBy(AdjustmentHistorys, "debit_adjust");
+    
+   
 
     // PO table column totals
     let po_basic_sum = 0,
@@ -137,6 +139,7 @@ async function generateCustomerPaymentSheet(
       billed_basic_sum = 0,
       billed_gst_sum = 0,
       billed_total_sum = 0;
+    remaining_sales_total = 0;
 
     // Sales totals (Bill Basic separate + grouped “Sales” totals)
     let sales_bill_basic_sum = 0,
@@ -187,7 +190,9 @@ async function generateCustomerPaymentSheet(
         const bill = deriveBilled(r);
         const advPaid = safeNum(r.Advance_paid ?? r.advance_paid);
         const advRemaining = safeNum(r.remain_amount ?? r.advance_remaining);
-
+        const remaining_sales = safeNum(
+          r.remaining_sales_value ?? r.remaining_sales_value
+        );
         // accumulate totals
         po_basic_sum += po.basic;
         po_gst_sum += po.gst;
@@ -197,7 +202,7 @@ async function generateCustomerPaymentSheet(
         billed_basic_sum += bill.basic;
         billed_gst_sum += bill.gst;
         billed_total_sum += bill.total;
-
+        remaining_sales_total += remaining_sales;
         return `
       <tr>
         <td class="nowrap">${i + 1}</td>
@@ -215,6 +220,7 @@ async function generateCustomerPaymentSheet(
         <td class="num nowrap">₹ ${inr(bill.basic)}</td>
         <td class="num nowrap">₹ ${inr(bill.gst)}</td>
         <td class="num nowrap">₹ ${inr(bill.total)}</td>
+        <td class="left">₹${inr(remaining_sales)}</td>
       </tr>`;
       })
       .join("");
@@ -275,13 +281,13 @@ async function generateCustomerPaymentSheet(
     };
 
     // 4 → Total Advances Paid to Vendors (from PO table)
-    const total_advances_paid_vendors = adv_paid_sum;
+    const total_advances_paid_vendors =  debitTotal - pick("total_return");
 
     // 5 → Invoice issued to customer (Sales total)
     const invoice_issued_to_customer = sales_total_sum;
 
     // 6 → Bills received, yet to be invoiced to customer (Billed total)
-    const bills_received_yet_to_invoice = billed_total_sum;
+    const bills_received_yet_to_invoice = remaining_sales_total;
 
     // 7 → Advances left after bills received [4 - 5 - 6]
     const advances_left_after_billed =
@@ -390,7 +396,7 @@ async function generateCustomerPaymentSheet(
     const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`;
     const fontFaceCSS = loadEmbeddedFontCSS();
 
-    const PAGE_FORMAT = "A4";
+    const PAGE_FORMAT = "A3";
     const ORIENTATION = "landscape";
 
     const htmlContent = `
@@ -569,6 +575,7 @@ async function generateCustomerPaymentSheet(
         <th rowspan="2">Advance Paid (₹)</th>
         <th rowspan="2">Advance Remaining (₹)</th>
         <th colspan="3">Total Billed (₹)</th>
+        <th rowspan="2">Remaining Sales Closure</th>
       </tr>
       <tr>
         <th>Basic (₹)</th><th>GST (₹)</th><th>Total (₹)</th>
@@ -587,6 +594,7 @@ async function generateCustomerPaymentSheet(
         <td class="num nowrap strong">₹ ${inr(billed_basic_sum)}</td>
         <td class="num nowrap strong">₹ ${inr(billed_gst_sum)}</td>
         <td class="num nowrap strong">₹ ${inr(billed_total_sum)}</td>
+        <td class "num nowrap strong">₹ ${inr(remaining_sales_total)} </td>
       </tr>
     </tfoot>
   </table>
