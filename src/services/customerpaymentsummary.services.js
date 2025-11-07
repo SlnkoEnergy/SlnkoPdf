@@ -290,12 +290,10 @@ async function generateCustomerPaymentSheet(
     const bills_received_yet_to_invoice = remaining_sales_total;
 
     // 7 → Advances left after bills received [4 - 5 - 6]
-    const advances_left_after_billed =
-      bills_received_yet_to_invoice < total_advances_paid_vendors
-        ? total_advances_paid_vendors -
+    const advances_left_after_billed =  total_advances_paid_vendors -
           invoice_issued_to_customer -
-          bills_received_yet_to_invoice
-        : 0;
+          bills_received_yet_to_invoice;
+          
     // 8 → Adjustment (Debit - Credit)
     const adjustment_debit_minus_credit = adj_debit_total - adj_credit_total;
 
