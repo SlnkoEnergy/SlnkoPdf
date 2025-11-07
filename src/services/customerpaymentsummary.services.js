@@ -188,8 +188,8 @@ async function generateCustomerPaymentSheet(
       .map((r, i) => {
         const po = derivePO(r);
         const bill = deriveBilled(r);
-        const advPaid = safeNum(r.Advance_paid ?? r.advance_paid);
-        const advRemaining = safeNum(r.remain_amount ?? r.advance_remaining);
+        const advPaid = safeNum((r.Advance_paid || r.po_number !== '') ? r.advance_paid : 0);
+        const advRemaining = safeNum((r.remain_amount || r.po_number !== '') ? r.advance_remaining : r.po_value);
         const remaining_sales = safeNum(
           r.remaining_sales_value ?? r.remaining_sales_value
         );
