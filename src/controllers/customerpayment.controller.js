@@ -11,7 +11,6 @@ const CustomerPaymentpdf = async (req, res) => {
       AdjustmentHistorys = [],
       balanceSummary = {},
     } = req.body || {};
-
     const credits = Array.isArray(creditHistorys) ? creditHistorys : [];
     const debits = Array.isArray(DebitHistorys) ? DebitHistorys : [];
     const purchases = Array.isArray(purchaseHistorys) ? purchaseHistorys : [];

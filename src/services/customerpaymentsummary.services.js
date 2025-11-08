@@ -140,6 +140,7 @@ async function generateCustomerPaymentSheet(
       billed_gst_sum = 0,
       billed_total_sum = 0;
     remaining_sales_total = 0;
+    remaining_sales_total_with_gst = 0;
 
     // Sales totals (Bill Basic separate + grouped “Sales” totals)
     let sales_bill_basic_sum = 0,
@@ -193,6 +194,7 @@ async function generateCustomerPaymentSheet(
         const remaining_sales = safeNum(
           r.remaining_sales_value ?? r.remaining_sales_value
         );
+        const remaining_sales_with_gst = safeNum(r.remaining_sales_value_with_gst ?? r.remaining_sales_value_with_gst)
         // accumulate totals
         po_basic_sum += po.basic;
         po_gst_sum += po.gst;
@@ -203,6 +205,7 @@ async function generateCustomerPaymentSheet(
         billed_gst_sum += bill.gst;
         billed_total_sum += bill.total;
         remaining_sales_total += remaining_sales;
+        remaining_sales_total_with_gst+=remaining_sales_with_gst;
         return `
       <tr>
         <td class="nowrap">${i + 1}</td>
@@ -221,6 +224,7 @@ async function generateCustomerPaymentSheet(
         <td class="num nowrap">₹ ${inr(bill.gst)}</td>
         <td class="num nowrap">₹ ${inr(bill.total)}</td>
         <td class="left">₹${inr(remaining_sales)}</td>
+        <td class="left">₹${inr(remaining_sales_with_gst)}</td>
       </tr>`;
       })
       .join("");
@@ -287,7 +291,7 @@ async function generateCustomerPaymentSheet(
     const invoice_issued_to_customer = sales_total_sum;
 
     // 6 → Bills received, yet to be invoiced to customer (Billed total)
-    const bills_received_yet_to_invoice = remaining_sales_total;
+    const bills_received_yet_to_invoice = remaining_sales_total_with_gst;
 
     // 7 → Advances left after bills received [4 - 5 - 6]
     const advances_left_after_billed =  total_advances_paid_vendors -
@@ -394,7 +398,7 @@ async function generateCustomerPaymentSheet(
     const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`;
     const fontFaceCSS = loadEmbeddedFontCSS();
 
-    const PAGE_FORMAT = "A3";
+    const PAGE_FORMAT = "A2";
     const ORIENTATION = "landscape";
 
     const htmlContent = `
@@ -574,6 +578,7 @@ async function generateCustomerPaymentSheet(
         <th rowspan="2">Advance Remaining (₹)</th>
         <th colspan="3">Total Billed (₹)</th>
         <th rowspan="2">Remaining Sales Closure</th>
+        <th rowspan="2">Remaining Sales Closure (inc GST)</th>
       </tr>
       <tr>
         <th>Basic (₹)</th><th>GST (₹)</th><th>Total (₹)</th>
@@ -593,6 +598,7 @@ async function generateCustomerPaymentSheet(
         <td class="num nowrap strong">₹ ${inr(billed_gst_sum)}</td>
         <td class="num nowrap strong">₹ ${inr(billed_total_sum)}</td>
         <td class "num nowrap strong">₹ ${inr(remaining_sales_total)} </td>
+        <td class "num nowrap strong">₹ ${inr(remaining_sales_total_with_gst)} </td>
       </tr>
     </tfoot>
   </table>
